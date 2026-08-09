@@ -1,145 +1,721 @@
-
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const DB='pm-dekor-v3', STORE='products', ASSETS='assets', SETTINGS='pm-dekor-settings-v3';
-let products=[], pendingImage='', selectedId=null, drag=null;
+const DB_NAME='pm-dekor-v5', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v5';
+let products=[], pendingImage='', selectedId=null, dragState=null;
 
-const defaults={brandName:'PM Dekor Melinda',facebook:'PM Dekor Melinda',instagram:'@pmdekor_melinda',orderText:'Rendelés üzenetben!',thanksText:'Köszönöm, hogy támogatod a kézzel készült alkotásokat!',accentColor:'#741521',posterTitle:'Mindenszenteki sírdíszek',posterSubtitle:'Kézzel készített, szeretettel díszítve',catalogTitle:'Mindenszenteki kollekció',posterTemplate:'classic',backgroundMode:'template'};
-let settings={...defaults,...JSON.parse(localStorage.getItem(SETTINGS)||'{}')};
+const defaults={
+  brandName:'PM Dekor Melinda',
+  facebook:'PM Dekor Melinda',
+  instagram:'@pmdekor_melinda',
+  orderText:'Rendelés üzenetben!',
+  thanksText:'Köszönöm, hogy támogatod a kézzel készült alkotásokat!',
+  accentColor:'#741521',
+  posterTitle:'Mindenszenteki sírdíszek',
+  posterSubtitle:'Kézzel készített, szeretettel díszítve',
+  catalogTitle:'Mindenszenteki kollekció',
+  backgroundMode:'template'
+};
+let settings={...defaults,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')};
 let assets={logo:'',background:''};
 
 function openDb(){
   return new Promise((resolve,reject)=>{
-    const r=indexedDB.open(DB,1);
-    r.onupgradeneeded=()=>{
-      const db=r.result;
-      if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE,{keyPath:'id',autoIncrement:true});
-      if(!db.objectStoreNames.contains(ASSETS)) db.createObjectStore(ASSETS,{keyPath:'key'});
+    const req=indexedDB.open(DB_NAME,1);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains(PRODUCT_STORE)) db.createObjectStore(PRODUCT_STORE,{keyPath:'id',autoIncrement:true});
+      if(!db.objectStoreNames.contains(ASSET_STORE)) db.createObjectStore(ASSET_STORE,{keyPath:'key'});
     };
-    r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error);
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
   });
 }
-async function getAll(store){const db=await openDb();return new Promise((res,rej)=>{const q=db.transaction(store,'readonly').objectStore(store).getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
-async function put(store,obj){const db=await openDb();return new Promise((res,rej)=>{const q=db.transaction(store,'readwrite').objectStore(store).put(obj);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
-async function add(store,obj){const db=await openDb();return new Promise((res,rej)=>{const q=db.transaction(store,'readwrite').objectStore(store).add(obj);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
-async function del(store,key){const db=await openDb();return new Promise((res,rej)=>{const q=db.transaction(store,'readwrite').objectStore(store).delete(key);q.onsuccess=()=>res();q.onerror=()=>rej(q.error)})}
-async function clearStore(store){const db=await openDb();return new Promise((res,rej)=>{const q=db.transaction(store,'readwrite').objectStore(store).clear();q.onsuccess=()=>res();q.onerror=()=>rej(q.error)})}
-
-function norm(p){return {category:'',description:'',onPoster:true,frameMode:'cover',scale:100,offsetX:0,offsetY:0,order:999,...p}}
-function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
-function fileData(file,max=1800,quality=.88){return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',quality))};im.onerror=rej;im.src=fr.result};fr.onerror=rej;fr.readAsDataURL(file)})}
-function mediaClass(p){return p.frameMode==='contain'?'contain':'cover'}
-function transform(p){return `translate(calc(-50% + ${p.offsetX||0}px),calc(-50% + ${p.offsetY||0}px)) scale(${(p.scale||100)/100})`}
-function mediaHtml(p, cls=''){return `<div class="media-frame ${mediaClass(p)} ${cls}" data-product-id="${p.id}"><img src="${p.image}" alt=""></div>`}
-function applyTransforms(scope=document){scope.querySelectorAll('.media-frame[data-product-id]').forEach(f=>{const p=products.find(x=>x.id===Number(f.dataset.productId));if(p){const im=f.querySelector('img');if(im)im.style.transform=transform(p);f.classList.toggle('selected',p.id===selectedId)}})}
-function leafSvg(cls){return `<svg class="ornament ${cls}" viewBox="0 0 130 120" aria-hidden="true"><path d="M8 106 C35 76 54 55 92 14" fill="none" stroke="#6f5a37" stroke-width="3"/><ellipse cx="28" cy="83" rx="9" ry="21" fill="#9a3c2d" transform="rotate(-45 28 83)"/><ellipse cx="48" cy="63" rx="9" ry="23" fill="#c77831" transform="rotate(-38 48 63)"/><ellipse cx="70" cy="43" rx="9" ry="22" fill="#b44335" transform="rotate(-35 70 43)"/><ellipse cx="87" cy="27" rx="8" ry="19" fill="#d7a647" transform="rotate(-26 87 27)"/><ellipse cx="41" cy="91" rx="8" ry="20" fill="#d5a046" transform="rotate(52 41 91)"/><ellipse cx="63" cy="72" rx="9" ry="21" fill="#9b2d39" transform="rotate(48 63 72)"/></svg>`}
-
-async function loadAssets(){const arr=await getAll(ASSETS);assets={logo:'',background:''};arr.forEach(a=>assets[a.key]=a.value)}
-async function refresh(){products=(await getAll(STORE)).map(norm).sort((a,b)=>(a.order??999)-(b.order??999)||a.id-b.id);await loadAssets();renderAll()}
-function renderAll(){renderProducts();populateCategories();renderPoster();renderCatalog();renderAssetPreviews();setTimeout(fit,60)}
-
-function renderProducts(){
-  const q=$('#searchInput').value.trim().toLowerCase(),host=$('#productList');host.innerHTML='';
-  const shown=products.filter(p=>!q||`${p.name} ${p.category} ${p.description}`.toLowerCase().includes(q));
-  $('#productCount').textContent=`${products.length} termék`;
-  if(!shown.length){host.innerHTML='<div class="empty">Még nincs termék vagy nincs találat.</div>';return}
-  shown.forEach(p=>{
-    const n=$('#productCardTemplate').content.cloneNode(true), card=n.querySelector('.manage-card'),frame=n.querySelector('.manage-thumb');
-    frame.classList.add(mediaClass(p));frame.dataset.productId=p.id;frame.querySelector('img').src=p.image;
-    n.querySelector('.manage-name').textContent=p.name;n.querySelector('.manage-category').textContent=p.category||'Nincs kategória';n.querySelector('.manage-price').textContent=p.price;n.querySelector('.manage-desc').textContent=p.description||'';
-    n.querySelector('.mode-badge').textContent=p.frameMode==='contain'?'Teljes kép':'Kitöltés';n.querySelector('.zoom-badge').textContent=`Zoom ${p.scale}%`;
-    const c=n.querySelector('.manage-poster');c.checked=p.onPoster;c.onchange=async()=>{p.onPoster=c.checked;await put(STORE,p);renderPoster()};
-    n.querySelector('.edit').onclick=()=>openEdit(p);n.querySelector('.delete').onclick=async()=>{if(confirm(`Törlöd? ${p.name}`)){await del(STORE,p.id);if(selectedId===p.id)selectedId=null;await refresh()}};
-    n.querySelector('.up').onclick=()=>move(p.id,-1);n.querySelector('.down').onclick=()=>move(p.id,1);host.appendChild(n)
-  });applyTransforms(host)
+async function dbGetAll(store){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const req=db.transaction(store,'readonly').objectStore(store).getAll();
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
 }
-async function move(id,d){const i=products.findIndex(p=>p.id===id),j=i+d;if(i<0||j<0||j>=products.length)return;[products[i],products[j]]=[products[j],products[i]];for(let k=0;k<products.length;k++){products[k].order=k;await put(STORE,products[k])}renderAll()}
+async function dbAdd(store,obj){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const req=db.transaction(store,'readwrite').objectStore(store).add(obj);
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function dbPut(store,obj){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const req=db.transaction(store,'readwrite').objectStore(store).put(obj);
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function dbDelete(store,key){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const req=db.transaction(store,'readwrite').objectStore(store).delete(key);
+    req.onsuccess=()=>resolve();
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function dbClear(store){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const req=db.transaction(store,'readwrite').objectStore(store).clear();
+    req.onsuccess=()=>resolve();
+    req.onerror=()=>reject(req.error);
+  });
+}
 
-function logoHtml(){return assets.logo?`<img src="${assets.logo}" alt="PM Dekor logó">`:`<div><div class="pm">PM</div><div class="brand">DEKOR</div><div class="small">MELINDA</div></div>`}
-function posterBackgroundStyle(){return settings.backgroundMode==='custom'&&assets.background?`style="background-image:linear-gradient(rgba(255,250,240,.12),rgba(255,250,240,.12)),url('${assets.background}')"`:''}
+function normProduct(p){
+  return {category:'',description:'',onPoster:true,frameMode:'cover',scale:100,offsetX:0,offsetY:0,order:999,...p};
+}
+function esc(s=''){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+function setAccent(hex){
+  document.documentElement.style.setProperty('--accent',hex);
+  document.documentElement.style.setProperty('--accent-dark',shade(hex,-30));
+}
+function shade(hex,amt){
+  const n=parseInt(hex.slice(1),16);
+  const r=Math.max(0,Math.min(255,(n>>16)+amt));
+  const g=Math.max(0,Math.min(255,((n>>8)&255)+amt));
+  const b=Math.max(0,Math.min(255,(n&255)+amt));
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+function fileToData(file,max=1800,quality=.88){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        const ratio=Math.min(1,max/Math.max(img.width,img.height));
+        const c=document.createElement('canvas');
+        c.width=Math.round(img.width*ratio);
+        c.height=Math.round(img.height*ratio);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        resolve(c.toDataURL('image/jpeg',quality));
+      };
+      img.onerror=reject;
+      img.src=reader.result;
+    };
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+function mediaModeClass(p){ return p.frameMode==='contain' ? 'contain' : 'cover'; }
+function mediaTransform(p){ return `translate(calc(-50% + ${p.offsetX||0}px), calc(-50% + ${p.offsetY||0}px)) scale(${(p.scale||100)/100})`; }
+
+async function loadAssets(){
+  const rows=await dbGetAll(ASSET_STORE);
+  assets={logo:'',background:''};
+  rows.forEach(r=>assets[r.key]=r.value);
+}
+async function refresh(){
+  products=(await dbGetAll(PRODUCT_STORE)).map(normProduct).sort((a,b)=>(a.order??999)-(b.order??999)||a.id-b.id);
+  await loadAssets();
+  renderAll();
+}
+function renderAll(){
+  renderProducts();
+  populateCategories();
+  renderPoster();
+  renderCatalog();
+  renderAssetPreviews();
+  setTimeout(fitPreviews,80);
+}
+
+function logoMarkup(){
+  if(assets.logo) return `<img src="${assets.logo}" alt="PM Dekor logó">`;
+  return `<div><div class="pm">PM</div><div class="brand">DEKOR</div><div class="small">MELINDA</div></div>`;
+}
+function cornerSvg(cls){
+  return `<svg class="corner ${cls}" viewBox="0 0 132 120" aria-hidden="true">
+    <path d="M10 106 C34 84 54 63 94 16" fill="none" stroke="#7a653e" stroke-width="3"/>
+    <ellipse cx="27" cy="84" rx="10" ry="21" fill="#b84538" transform="rotate(-44 27 84)"/>
+    <ellipse cx="49" cy="63" rx="9" ry="23" fill="#d38a3a" transform="rotate(-38 49 63)"/>
+    <ellipse cx="72" cy="42" rx="9" ry="22" fill="#8a3f2f" transform="rotate(-34 72 42)"/>
+    <ellipse cx="94" cy="22" rx="8" ry="18" fill="#e4b14e" transform="rotate(-25 94 22)"/>
+    <circle cx="108" cy="36" r="10" fill="#b53e57"/><circle cx="112" cy="48" r="8" fill="#c95d6f"/><circle cx="101" cy="46" r="8" fill="#a73043"/>
+  </svg>`;
+}
+function singleSlotMarkup(p,size,type){
+  const photoClass=size==='small' ? 'small-photo' : size==='big' ? 'big-photo' : 'bottom-photo';
+  if(!p){
+    return `<div class="product-slot"><div class="slot-head">${type==='top'?'<div class="price">—</div>':'<span class="ribbon">—</span>'}<div class="label">ÜRES HELY</div></div><div class="${photoClass} placeholder">Nincs kijelölt termék</div></div>`;
+  }
+  const head = type==='top'
+    ? `<div class="price">${esc(p.price)}</div><div class="label">${esc(p.category||p.name)}</div>`
+    : `<span class="ribbon">${esc(p.price)}</span><div class="label">${esc(p.name)}</div>`;
+  return `<div class="product-slot">
+    <div class="slot-head">${head}</div>
+    <div class="${photoClass} media-frame ${mediaModeClass(p)}" data-product-id="${p.id}">
+      <img src="${p.image}" alt="">
+    </div>
+  </div>`;
+}
+function combinedSlotMarkup(items,size,type,title,priceLabel){
+  const boxClass=size==='small'?'small':'big';
+  const inner = items.map(p=>{
+    if(!p){
+      return `<div class="combo-cell"><div class="combo-mini-head"><div class="combo-mini-price">—</div><div class="combo-mini-label">ÜRES</div></div><div class="combo-media placeholder">Nincs kép</div></div>`;
+    }
+    return `<div class="combo-cell">
+      <div class="combo-mini-head">
+        <div class="combo-mini-price">${esc(p.price)}</div>
+        <div class="combo-mini-label">${esc(p.category || p.name)}</div>
+      </div>
+      <div class="combo-media media-frame ${mediaModeClass(p)}" data-product-id="${p.id}">
+        <img src="${p.image}" alt="">
+      </div>
+    </div>`;
+  }).join('');
+  const head = type==='top'
+    ? `<div class="combo-main">${esc(priceLabel)}</div><div class="combo-title">${esc(title)}</div>`
+    : `<span class="combo-ribbon">${esc(priceLabel)}</span><div class="combo-title">${esc(title)}</div>`;
+  return `<div class="combo-slot">
+    <div class="combo-head">${head}</div>
+    <div class="combo-box combo-two ${boxClass}">
+      <div class="combo-items two">${inner}</div>
+    </div>
+  </div>`;
+}
+function selectedProducts(){ return products.filter(p=>p.onPoster).slice(0,13); }
+function posterBackgroundStyle(){
+  if(settings.backgroundMode==='custom' && assets.background){
+    return `background-image:linear-gradient(rgba(255,250,240,.12),rgba(255,250,240,.12)),url('${assets.background}')`;
+  }
+  return '';
+}
 function renderPoster(){
-  settings.posterTemplate=$('#posterTemplate').value;settings.backgroundMode=$('#backgroundMode').value;settings.posterTitle=$('#posterTitle').value;settings.posterSubtitle=$('#posterSubtitle').value;
-  const chosen=products.filter(p=>p.onPoster).slice(0,settings.posterTemplate==='classic'?9:10),host=$('#posterCanvas');
-  host.innerHTML=settings.posterTemplate==='classic'?classicPoster(chosen):modernPoster(chosen);
-  applyTransforms(host);attachDrag(host);updateSelectedControls()
-}
-function classicPoster(items){
-  const slots=Array.from({length:9},(_,i)=>items[i]||null);
-  const words=($('#posterTitle').value||'Mindenszenteki sírdíszek').trim().split(/\s+/), script=words.shift()||'Mindenszenteki',main=words.join(' ')||'SÍRDÍSZEK';
-  const card=(p,type)=>{
-    if(!p)return `<div class="classic-card"><div class="classic-card-head">${type==='top'?'<div class="price">—</div>':'<span class="ribbon">—</span>'}</div><div class="classic-photo empty">Üres hely</div></div>`;
-    return `<div class="classic-card"><div class="classic-card-head">${type==='top'?`<div class="price">${esc(p.price)}</div><div class="label">${esc(p.category||p.name)}</div>`:`<span class="ribbon">${esc(p.price)}</span><div class="label">${esc(p.name)}</div>`}</div>${mediaHtml(p,'classic-photo')}<div class="classic-card-name">${type==='top'?esc(p.name):''}</div></div>`
-  };
-  return `<section class="poster-classic ${settings.backgroundMode==='custom'&&assets.background?'custom-bg':''}" ${posterBackgroundStyle()}>
-    ${leafSvg('tl')}${leafSvg('tr')}${leafSvg('bl')}${leafSvg('br')}
-    <header class="poster-head"><div class="classic-logo">${logoHtml()}</div><div class="classic-title"><div class="script">${esc(script)}</div><h2>${esc(main)}</h2><div class="tag">♥ ${esc($('#posterSubtitle').value)} ♥</div></div><div class="candle-wrap"><div class="candle"></div></div></header>
-    <div class="classic-grid classic-top">${slots.slice(0,4).map(p=>card(p,'top')).join('')}</div>
-    <div class="classic-grid classic-mid">${slots.slice(4,6).map(p=>card(p,'mid')).join('')}</div>
-    <div class="classic-grid classic-bottom">${slots.slice(6,9).map(p=>card(p,'bottom')).join('')}</div>
-    <footer class="poster-footer"><strong>${esc(settings.brandName)}</strong><div class="contacts">Facebook: ${esc(settings.facebook)} &nbsp; • &nbsp; Instagram: ${esc(settings.instagram)} &nbsp; • &nbsp; ${esc(settings.orderText)}</div><div class="thanks">♥ ${esc(settings.thanksText)} ♥</div></footer>
-  </section>`
-}
-function modernPoster(items){
-  return `<section class="poster-modern ${settings.backgroundMode==='custom'&&assets.background?'custom-bg':''}" ${posterBackgroundStyle()}><div class="modern-head"><h2>${esc($('#posterTitle').value)}</h2><p>${esc($('#posterSubtitle').value)}</p></div><div class="modern-grid">${items.length?items.map(p=>`<article class="modern-card">${mediaHtml(p,'modern-photo')}<div class="modern-info"><small>${esc(p.category||'PM Dekor')}</small><h3>${esc(p.name)}</h3><p>${esc(p.description||'Kézzel készített dekoráció.')}</p><div class="price">${esc(p.price)}</div></div></article>`).join(''):'<div class="empty">Jelölj ki termékeket a plakáthoz.</div>'}</div><footer class="poster-footer"><strong>${esc(settings.brandName)}</strong><div class="contacts">${esc(settings.facebook)} • ${esc(settings.instagram)} • ${esc(settings.orderText)}</div></footer></section>`
-}
+  settings.posterTitle=$('#posterTitle').value;
+  settings.posterSubtitle=$('#posterSubtitle').value;
+  settings.backgroundMode=$('#backgroundMode').value;
 
-function attachDrag(scope){
+  const items=selectedProducts();
+  const host=$('#posterCanvas');
+  const topA=combinedSlotMarkup([items[0],items[1]],'small','top','KIS SZÍV ALAKÚ SÍRDÍSZEK', `${items[0]?.price || '600 Ft'} / ${items[1]?.price || '800 Ft'}`);
+  const topB=combinedSlotMarkup([items[2],items[3]],'small','top','SZÍV ALAKÚ SÍRDÍSZEK', `${items[2]?.price || '1 600 Ft'} / ${items[3]?.price || '1 800 Ft'}`);
+  const midA=combinedSlotMarkup([items[4],items[5]],'big','mid','GALAMBOS ÉS VIRÁGOS SZÍV ALAKÚ SÍRDÍSZEK', items[4]?.price || '2 300 Ft');
+  const midB=combinedSlotMarkup([items[6],items[7]],'big','mid','ANGYALKÁS SÍRDÍSZEK', items[6]?.price || '2 500 Ft');
+  host.innerHTML=`<section class="poster ${settings.backgroundMode==='custom' && assets.background ? 'custom-bg' : ''}" style="${posterBackgroundStyle()}">
+    ${cornerSvg('tl')}${cornerSvg('tr')}${cornerSvg('bl')}${cornerSvg('br')}
+    <header class="poster-head">
+      <div class="logo-disc">${logoMarkup()}</div>
+      <div class="poster-title">
+        <div class="script">${esc((settings.posterTitle||'Mindenszenteki sírdíszek').split(' ')[0] || 'Mindenszenteki')}</div>
+        <h2>${esc(((settings.posterTitle||'Mindenszenteki sírdíszek').split(' ').slice(1).join(' ')) || 'SÍRDÍSZEK')}</h2>
+        <div class="tag">♥ ${esc(settings.posterSubtitle)} ♥</div>
+      </div>
+      <div class="candle-wrap"><div class="candle"></div></div>
+    </header>
+    <div class="grid top-grid">${topA}${topB}</div>
+    <div class="grid mid-grid">${midA}${midB}</div>
+    <div class="grid bottom-grid">
+      ${singleSlotMarkup(items[8],'bottom','bottom')}
+      ${singleSlotMarkup(items[9],'bottom','bottom')}
+      ${singleSlotMarkup(items[10],'bottom','bottom')}
+    </div>
+    <footer class="poster-footer">
+      <strong>${esc(settings.brandName)}</strong>
+      <div class="contacts">Facebook: ${esc(settings.facebook)} &nbsp; • &nbsp; Instagram: ${esc(settings.instagram)} &nbsp; • &nbsp; ${esc(settings.orderText)}</div>
+      <div class="thanks">♥ ${esc(settings.thanksText)} ♥</div>
+    </footer>
+  </section>`;
+  applyMediaTransforms(host);
+  attachPosterDrag(host);
+  updateSelectedControls();
+}
+function applyMediaTransforms(scope=document){
   scope.querySelectorAll('.media-frame[data-product-id]').forEach(frame=>{
-    frame.onpointerdown=e=>{if(e.button!==undefined&&e.button!==0)return;const id=Number(frame.dataset.productId),p=products.find(x=>x.id===id);if(!p)return;selectedId=id;updateSelectedControls();applyTransforms(scope);drag={id,startX:e.clientX,startY:e.clientY,ox:p.offsetX||0,oy:p.offsetY||0};frame.setPointerCapture?.(e.pointerId);e.preventDefault()};
-    frame.onpointermove=e=>{if(!drag||drag.id!==Number(frame.dataset.productId))return;const p=products.find(x=>x.id===drag.id);p.offsetX=Math.round(drag.ox+(e.clientX-drag.startX));p.offsetY=Math.round(drag.oy+(e.clientY-drag.startY));applyTransforms(scope);syncSelectedValues(p)};
-    frame.onpointerup=async()=>{if(!drag)return;const p=products.find(x=>x.id===drag.id);drag=null;await put(STORE,p);renderProducts();renderCatalog()}
-  })
+    const p=products.find(x=>x.id===Number(frame.dataset.productId));
+    if(!p) return;
+    const img=frame.querySelector('img');
+    if(img) img.style.transform=mediaTransform(p);
+    frame.classList.toggle('selected', selectedId===p.id);
+  });
+}
+function attachPosterDrag(scope){
+  scope.querySelectorAll('.media-frame[data-product-id]').forEach(frame=>{
+    frame.onpointerdown=e=>{
+      if(e.button!==undefined && e.button!==0) return;
+      const id=Number(frame.dataset.productId);
+      const p=products.find(x=>x.id===id);
+      if(!p) return;
+      selectedId=id;
+      updateSelectedControls();
+      applyMediaTransforms(scope);
+      dragState={id,startX:e.clientX,startY:e.clientY,offsetX:p.offsetX||0,offsetY:p.offsetY||0};
+      frame.setPointerCapture?.(e.pointerId);
+      e.preventDefault();
+    };
+    frame.onpointermove=e=>{
+      if(!dragState || dragState.id!==Number(frame.dataset.productId)) return;
+      const p=products.find(x=>x.id===dragState.id);
+      if(!p) return;
+      p.offsetX=Math.round(dragState.offsetX + (e.clientX-dragState.startX));
+      p.offsetY=Math.round(dragState.offsetY + (e.clientY-dragState.startY));
+      applyMediaTransforms(scope);
+      syncSelectedControlValues(p);
+    };
+    frame.onpointerup=async()=>{
+      if(!dragState) return;
+      const p=products.find(x=>x.id===dragState.id);
+      dragState=null;
+      if(p){
+        await dbPut(PRODUCT_STORE,p);
+        renderProducts();
+        renderCatalog();
+      }
+    };
+  });
 }
 function updateSelectedControls(){
-  const p=products.find(x=>x.id===selectedId),els=['selectedFrameMode','selectedScale','selectedX','selectedY','resetSelectedBtn'];
-  els.forEach(id=>$('#'+id).disabled=!p);
-  if(!p){$('#selectedProductText').textContent='Kattints egy termékképre a plakáton.';return}
-  $('#selectedProductText').textContent=p.name;$('#selectedFrameMode').value=p.frameMode;$('#selectedScale').value=p.scale;$('#selectedX').value=p.offsetX;$('#selectedY').value=p.offsetY;syncSelectedValues(p)
+  const p=products.find(x=>x.id===selectedId);
+  ['selectedFrameMode','selectedScale','selectedX','selectedY','resetSelectedBtn'].forEach(id=>$('#'+id).disabled=!p);
+  if(!p){
+    $('#selectedProductText').textContent='Kattints egy képre a plakáton.';
+    $('#selectedScaleValue').textContent='100%';
+    $('#selectedXValue').textContent='0';
+    $('#selectedYValue').textContent='0';
+    return;
+  }
+  $('#selectedProductText').textContent=p.name;
+  $('#selectedFrameMode').value=p.frameMode;
+  $('#selectedScale').value=p.scale;
+  $('#selectedX').value=p.offsetX;
+  $('#selectedY').value=p.offsetY;
+  syncSelectedControlValues(p);
 }
-function syncSelectedValues(p){$('#selectedScaleValue').textContent=`${p.scale}%`;$('#selectedXValue').textContent=p.offsetX;$('#selectedYValue').textContent=p.offsetY}
-async function changeSelected(){
-  const p=products.find(x=>x.id===selectedId);if(!p)return;p.frameMode=$('#selectedFrameMode').value;p.scale=Number($('#selectedScale').value);p.offsetX=Number($('#selectedX').value);p.offsetY=Number($('#selectedY').value);syncSelectedValues(p);await put(STORE,p);renderAll()
+function syncSelectedControlValues(p){
+  $('#selectedScaleValue').textContent=p.scale+'%';
+  $('#selectedXValue').textContent=p.offsetX;
+  $('#selectedYValue').textContent=p.offsetY;
 }
-['selectedFrameMode','selectedScale','selectedX','selectedY'].forEach(id=>$('#'+id).addEventListener('input',changeSelected));
-$('#resetSelectedBtn').onclick=async()=>{const p=products.find(x=>x.id===selectedId);if(!p)return;p.frameMode='cover';p.scale=100;p.offsetX=0;p.offsetY=0;await put(STORE,p);renderAll()};
+async function changeSelectedProduct(){
+  const p=products.find(x=>x.id===selectedId);
+  if(!p) return;
+  p.frameMode=$('#selectedFrameMode').value;
+  p.scale=Number($('#selectedScale').value);
+  p.offsetX=Number($('#selectedX').value);
+  p.offsetY=Number($('#selectedY').value);
+  await dbPut(PRODUCT_STORE,p);
+  renderAll();
+}
+['selectedFrameMode','selectedScale','selectedX','selectedY'].forEach(id=>$('#'+id).addEventListener('input',changeSelectedProduct));
+$('#resetSelectedBtn').onclick=async()=>{
+  const p=products.find(x=>x.id===selectedId);
+  if(!p) return;
+  p.frameMode='cover'; p.scale=100; p.offsetX=0; p.offsetY=0;
+  await dbPut(PRODUCT_STORE,p);
+  renderAll();
+};
 
-function populateCategories(){const s=$('#catalogCategory'),v=s.value,c=[...new Set(products.map(p=>p.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'hu'));s.innerHTML='<option value="">Minden kategória</option>'+c.map(x=>`<option>${esc(x)}</option>`).join('');if(c.includes(v))s.value=v}
 function renderCatalog(){
-  const host=$('#catalogCanvas'),per=Number($('#itemsPerPage').value),cat=$('#catalogCategory').value,items=products.filter(p=>!cat||p.category===cat),pages=[];for(let i=0;i<items.length;i+=per)pages.push(items.slice(i,i+per));if(!pages.length)pages.push([]);
-  host.innerHTML=pages.map((page,i)=>`<section class="catalog-page"><header class="catalog-head"><div><div class="brand">${esc(settings.brandName)}</div><h2>${esc($('#catalogTitle').value)}</h2></div><div>${i+1}. oldal</div></header><div class="catalog-grid">${page.length?page.map(p=>`<article class="catalog-card">${mediaHtml(p,'catalog-photo')}<div class="catalog-body"><small>${esc(p.category||'PM Dekor')}</small><h3>${esc(p.name)}</h3><p>${esc(p.description||'Kézzel készített dekoráció.')}</p><div class="catalog-price">${esc(p.price)}</div></div></article>`).join(''):'<div class="empty">Nincs termék.</div>'}</div><footer class="catalog-foot"><span>${esc(settings.orderText)} • ${esc(settings.facebook)}</span><span>${esc(settings.instagram)}</span></footer></section>`).join('');applyTransforms(host)
+  settings.catalogTitle=$('#catalogTitle').value;
+  const perPage=Number($('#itemsPerPage').value);
+  const category=$('#catalogCategory').value;
+  const items=products.filter(p=>!category || p.category===category);
+  const pages=[];
+  for(let i=0;i<items.length;i+=perPage) pages.push(items.slice(i,i+perPage));
+  if(!pages.length) pages.push([]);
+
+  $('#catalogCanvas').innerHTML=pages.map((page,index)=>`
+    <section class="catalog-page">
+      <header class="catalog-head">
+        <div>
+          <div class="brand">${esc(settings.brandName)}</div>
+          <h2>${esc(settings.catalogTitle)}</h2>
+        </div>
+        <div>${index+1}. oldal</div>
+      </header>
+      <div class="catalog-grid">
+        ${page.length ? page.map(p=>`
+          <article class="catalog-card">
+            <div class="catalog-photo media-frame ${mediaModeClass(p)}" data-product-id="${p.id}">
+              <img src="${p.image}" alt="">
+            </div>
+            <div class="catalog-body">
+              <small>${esc(p.category||'PM Dekor')}</small>
+              <h3>${esc(p.name)}</h3>
+              <p>${esc(p.description||'Kézzel készített dekoráció.')}</p>
+              <div class="catalog-price">${esc(p.price)}</div>
+            </div>
+          </article>
+        `).join('') : `<div class="empty" style="grid-column:1/-1">Nincs megjeleníthető termék.</div>`}
+      </div>
+      <div class="catalog-foot">
+        <span>${esc(settings.orderText)} • Facebook: ${esc(settings.facebook)}</span>
+        <span>${esc(settings.instagram)}</span>
+      </div>
+    </section>
+  `).join('');
+  applyMediaTransforms($('#catalogCanvas'));
+}
+function populateCategories(){
+  const current=$('#catalogCategory').value;
+  const categories=[...new Set(products.map(p=>p.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'hu'));
+  $('#catalogCategory').innerHTML='<option value="">Minden kategória</option>'+categories.map(c=>`<option>${esc(c)}</option>`).join('');
+  if(categories.includes(current)) $('#catalogCategory').value=current;
 }
 
-function openEdit(p){$('#editId').value=p.id;$('#editName').value=p.name;$('#editPrice').value=p.price;$('#editCategory').value=p.category;$('#editDesc').value=p.description;$('#editPoster').checked=p.onPoster;$('#editMode').value=p.frameMode;$('#editScale').value=p.scale;$('#editX').value=p.offsetX;$('#editY').value=p.offsetY;$('#editImage').value='';$('#editPreview').className='edit-preview media-frame '+mediaClass(p);$('#editPreview img').src=p.image;$('#editPreview img').style.transform=transform(p);editLabels();$('#editModal').classList.remove('hidden')}
-function editLabels(){const p={scale:Number($('#editScale').value),offsetX:Number($('#editX').value),offsetY:Number($('#editY').value)};$('#editScaleValue').textContent=p.scale+'%';$('#editXValue').textContent=p.offsetX;$('#editYValue').textContent=p.offsetY;$('#editPreview').className='edit-preview media-frame '+$('#editMode').value;$('#editPreview img').style.transform=transform(p)}
-['editMode','editScale','editX','editY'].forEach(id=>$('#'+id).addEventListener('input',editLabels));
-$('#closeModalBtn').onclick=()=>$('#editModal').classList.add('hidden');$('#editModal').onclick=e=>{if(e.target.id==='editModal')$('#editModal').classList.add('hidden')};
-$('#editImage').onchange=async e=>{const f=e.target.files[0];if(f)$('#editPreview img').src=await fileData(f)};
-$('#editForm').onsubmit=async e=>{e.preventDefault();const p=products.find(x=>x.id===Number($('#editId').value));p.name=$('#editName').value.trim();p.price=$('#editPrice').value.trim();p.category=$('#editCategory').value.trim();p.description=$('#editDesc').value.trim();p.onPoster=$('#editPoster').checked;p.frameMode=$('#editMode').value;p.scale=Number($('#editScale').value);p.offsetX=Number($('#editX').value);p.offsetY=Number($('#editY').value);const f=$('#editImage').files[0];if(f)p.image=await fileData(f);await put(STORE,p);$('#editModal').classList.add('hidden');await refresh()};
+function renderProducts(){
+  const q=$('#searchInput').value.trim().toLowerCase();
+  const shown=products.filter(p=>!q || `${p.name} ${p.category} ${p.description}`.toLowerCase().includes(q));
+  $('#productCount').textContent=`${products.length} termék`;
+  const list=$('#productList');
+  list.innerHTML='';
+  if(!shown.length){
+    list.innerHTML='<div class="empty">Még nincs termék vagy nincs találat.</div>';
+    return;
+  }
+  shown.forEach(p=>{
+    const node=$('#productCardTemplate').content.cloneNode(true);
+    const frame=node.querySelector('.manage-thumb');
+    frame.classList.add(mediaModeClass(p));
+    frame.dataset.productId=p.id;
+    frame.querySelector('img').src=p.image;
+    node.querySelector('.manage-name').textContent=p.name;
+    node.querySelector('.manage-category').textContent=p.category || 'Nincs kategória';
+    node.querySelector('.manage-price').textContent=p.price;
+    node.querySelector('.manage-desc').textContent=p.description || '';
+    node.querySelector('.mode-badge').textContent=p.frameMode==='contain' ? 'Teljes kép' : 'Kitöltés';
+    node.querySelector('.zoom-badge').textContent=`Zoom ${p.scale}%`;
+    const cb=node.querySelector('.manage-poster');
+    cb.checked=p.onPoster;
+    cb.onchange=async()=>{ p.onPoster=cb.checked; await dbPut(PRODUCT_STORE,p); renderPoster(); };
+    node.querySelector('.delete').onclick=async()=>{
+      if(!confirm(`Törlöd ezt a terméket?\n${p.name}`)) return;
+      await dbDelete(PRODUCT_STORE,p.id);
+      if(selectedId===p.id) selectedId=null;
+      await refresh();
+    };
+    node.querySelector('.edit').onclick=()=>openEdit(p);
+    node.querySelector('.up').onclick=()=>moveProduct(p.id,-1);
+    node.querySelector('.down').onclick=()=>moveProduct(p.id,1);
+    list.appendChild(node);
+  });
+  applyMediaTransforms(list);
+}
+async function moveProduct(id,dir){
+  const i=products.findIndex(p=>p.id===id);
+  const j=i+dir;
+  if(i<0 || j<0 || j>=products.length) return;
+  [products[i],products[j]]=[products[j],products[i]];
+  for(let k=0;k<products.length;k++){
+    products[k].order=k;
+    await dbPut(PRODUCT_STORE,products[k]);
+  }
+  renderAll();
+}
 
-function addLabels(){ $('#scaleValue').textContent=$('#scaleInput').value+'%';$('#offsetXValue').textContent=$('#offsetXInput').value;$('#offsetYValue').textContent=$('#offsetYInput').value}
-['scaleInput','offsetXInput','offsetYInput'].forEach(id=>$('#'+id).oninput=addLabels);
-$('#imageInput').onchange=async e=>{const f=e.target.files[0];if(!f)return;pendingImage=await fileData(f);$('#thumbPreview').innerHTML=`<img src="${pendingImage}" alt="">`};
-$('#productForm').onsubmit=async e=>{e.preventDefault();if(!pendingImage)return alert('Válassz képet.');await add(STORE,norm({name:$('#nameInput').value.trim(),price:$('#priceInput').value.trim(),category:$('#categoryInput').value.trim(),description:$('#descInput').value.trim(),onPoster:$('#posterInput').checked,image:pendingImage,frameMode:$('#frameModeInput').value,scale:Number($('#scaleInput').value),offsetX:Number($('#offsetXInput').value),offsetY:Number($('#offsetYInput').value),order:products.length}));e.target.reset();$('#posterInput').checked=true;$('#frameModeInput').value='cover';$('#scaleInput').value=100;$('#offsetXInput').value=0;$('#offsetYInput').value=0;pendingImage='';$('#thumbPreview').textContent='Nincs kiválasztott kép';addLabels();await refresh()};
+function openEdit(p){
+  $('#editId').value=p.id;
+  $('#editName').value=p.name;
+  $('#editPrice').value=p.price;
+  $('#editCategory').value=p.category;
+  $('#editDesc').value=p.description;
+  $('#editPoster').checked=p.onPoster;
+  $('#editMode').value=p.frameMode;
+  $('#editScale').value=p.scale;
+  $('#editX').value=p.offsetX;
+  $('#editY').value=p.offsetY;
+  $('#editImage').value='';
+  $('#editPreview').className='edit-preview media-frame '+mediaModeClass(p);
+  $('#editPreview img').src=p.image;
+  $('#editPreview img').style.transform=mediaTransform(p);
+  updateEditLabels();
+  $('#editModal').classList.remove('hidden');
+}
+function updateEditLabels(){
+  const tmp={scale:Number($('#editScale').value),offsetX:Number($('#editX').value),offsetY:Number($('#editY').value)};
+  $('#editScaleValue').textContent=tmp.scale+'%';
+  $('#editXValue').textContent=tmp.offsetX;
+  $('#editYValue').textContent=tmp.offsetY;
+  $('#editPreview').className='edit-preview media-frame '+$('#editMode').value;
+  $('#editPreview img').style.transform=mediaTransform(tmp);
+}
+['editMode','editScale','editX','editY'].forEach(id=>$('#'+id).addEventListener('input',updateEditLabels));
+$('#closeModalBtn').onclick=()=>$('#editModal').classList.add('hidden');
+$('#editModal').onclick=e=>{ if(e.target.id==='editModal') $('#editModal').classList.add('hidden'); };
+$('#editImage').onchange=async e=>{
+  const file=e.target.files[0];
+  if(!file) return;
+  $('#editPreview img').src=await fileToData(file);
+};
+$('#editForm').onsubmit=async e=>{
+  e.preventDefault();
+  const p=products.find(x=>x.id===Number($('#editId').value));
+  if(!p) return;
+  p.name=$('#editName').value.trim();
+  p.price=$('#editPrice').value.trim();
+  p.category=$('#editCategory').value.trim();
+  p.description=$('#editDesc').value.trim();
+  p.onPoster=$('#editPoster').checked;
+  p.frameMode=$('#editMode').value;
+  p.scale=Number($('#editScale').value);
+  p.offsetX=Number($('#editX').value);
+  p.offsetY=Number($('#editY').value);
+  const file=$('#editImage').files[0];
+  if(file) p.image=await fileToData(file);
+  await dbPut(PRODUCT_STORE,p);
+  $('#editModal').classList.add('hidden');
+  await refresh();
+};
 
-function setAccent(c){document.documentElement.style.setProperty('--accent',c);document.documentElement.style.setProperty('--accent-dark',shade(c,-30))}function shade(h,a){const n=parseInt(h.slice(1),16),r=Math.max(0,Math.min(255,(n>>16)+a)),g=Math.max(0,Math.min(255,((n>>8)&255)+a)),b=Math.max(0,Math.min(255,(n&255)+a));return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1)}
-function loadSettingsUi(){['brandName','facebook','instagram','orderText','thanksText','accentColor','posterTitle','posterSubtitle','catalogTitle','posterTemplate','backgroundMode'].forEach(id=>{if(settings[id]!==undefined&&$('#'+id))$('#'+id).value=settings[id]});setAccent(settings.accentColor);addLabels()}
-$('#saveSettingsBtn').onclick=()=>{['brandName','facebook','instagram','orderText','thanksText','accentColor'].forEach(id=>settings[id]=$('#'+id).value.trim?.()||$('#'+id).value);localStorage.setItem(SETTINGS,JSON.stringify(settings));setAccent(settings.accentColor);renderAll();alert('Beállítások elmentve.')};$('#accentColor').oninput=e=>setAccent(e.target.value);
-$('#logoInput').onchange=async e=>{const f=e.target.files[0];if(!f)return;assets.logo=await fileData(f,1000,.9);await put(ASSETS,{key:'logo',value:assets.logo});renderAll()};$('#removeLogoBtn').onclick=async()=>{assets.logo='';await del(ASSETS,'logo');renderAll()};
-$('#backgroundInput').onchange=async e=>{const f=e.target.files[0];if(!f)return;assets.background=await fileData(f,2200,.86);await put(ASSETS,{key:'background',value:assets.background});$('#backgroundMode').value='custom';settings.backgroundMode='custom';renderAll()};$('#removeBackgroundBtn').onclick=async()=>{assets.background='';await del(ASSETS,'background');$('#backgroundMode').value='template';settings.backgroundMode='template';renderAll()};
-function renderAssetPreviews(){const h=$('#logoPreview');h.innerHTML=assets.logo?`<img src="${assets.logo}" alt="Logó">`:'Nincs saját logó – a PM Dekor szöveges logó jelenik meg.'}
+function updateAddLabels(){
+  $('#scaleValue').textContent=$('#scaleInput').value+'%';
+  $('#offsetXValue').textContent=$('#offsetXInput').value;
+  $('#offsetYValue').textContent=$('#offsetYInput').value;
+}
+['scaleInput','offsetXInput','offsetYInput'].forEach(id=>$('#'+id).oninput=updateAddLabels);
 
-['posterTemplate','backgroundMode','posterTitle','posterSubtitle'].forEach(id=>$('#'+id).addEventListener('input',renderPoster));['catalogTitle','itemsPerPage','catalogCategory'].forEach(id=>$('#'+id).addEventListener('input',renderCatalog));$('#searchInput').oninput=renderProducts;
-$$('.tab').forEach(b=>b.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));$$('.view').forEach(x=>x.classList.remove('active'));b.classList.add('active');$('#view-'+b.dataset.tab).classList.add('active');setTimeout(fit,50)});
+$('#imageInput').onchange=async e=>{
+  const file=e.target.files[0];
+  if(!file) return;
+  pendingImage=await fileToData(file);
+  $('#thumbPreview').innerHTML=`<img src="${pendingImage}" alt="">`;
+};
+$('#productForm').onsubmit=async e=>{
+  e.preventDefault();
+  if(!pendingImage) return alert('Válassz képet.');
+  await dbAdd(PRODUCT_STORE,normProduct({
+    name:$('#nameInput').value.trim(),
+    price:$('#priceInput').value.trim(),
+    category:$('#categoryInput').value.trim(),
+    description:$('#descInput').value.trim(),
+    onPoster:$('#posterInput').checked,
+    image:pendingImage,
+    frameMode:$('#frameModeInput').value,
+    scale:Number($('#scaleInput').value),
+    offsetX:Number($('#offsetXInput').value),
+    offsetY:Number($('#offsetYInput').value),
+    order:products.length
+  }));
+  e.target.reset();
+  pendingImage='';
+  $('#thumbPreview').textContent='Nincs kiválasztott kép';
+  $('#posterInput').checked=true;
+  $('#frameModeInput').value='cover';
+  $('#scaleInput').value=100;
+  $('#offsetXInput').value=0;
+  $('#offsetYInput').value=0;
+  updateAddLabels();
+  await refresh();
+};
 
-$('#exportPosterBtn').onclick=async()=>{const btn=$('#exportPosterBtn');btn.disabled=true;btn.textContent='Készül…';try{const el=$('#posterCanvas').firstElementChild,c=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#fffaf0'}),a=document.createElement('a');a.download='pm-dekor-plakat.png';a.href=c.toDataURL('image/png');a.click()}finally{btn.disabled=false;btn.textContent='Plakát letöltése PNG-ben'}};
-$('#exportCatalogBtn').onclick=async()=>{const btn=$('#exportCatalogBtn');btn.disabled=true;btn.textContent='PDF készül…';try{const {jsPDF}=window.jspdf,pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'}),pages=$$('.catalog-page');for(let i=0;i<pages.length;i++){const c=await html2canvas(pages[i],{scale:1.5,useCORS:true,backgroundColor:'#fffaf0'});if(i)pdf.addPage();pdf.addImage(c.toDataURL('image/jpeg',.92),'JPEG',0,0,210,297)}pdf.save('pm-dekor-katalogus.pdf')}finally{btn.disabled=false;btn.textContent='Katalógus letöltése PDF-ben'}};
+function loadSettingsUi(){
+  ['brandName','facebook','instagram','orderText','thanksText','accentColor','posterTitle','posterSubtitle','catalogTitle','backgroundMode'].forEach(id=>{
+    if($('#'+id) && settings[id]!==undefined) $('#'+id).value=settings[id];
+  });
+  setAccent(settings.accentColor);
+  updateAddLabels();
+}
+$('#saveSettingsBtn').onclick=()=>{
+  settings.brandName=$('#brandName').value.trim() || defaults.brandName;
+  settings.facebook=$('#facebook').value.trim();
+  settings.instagram=$('#instagram').value.trim();
+  settings.orderText=$('#orderText').value.trim();
+  settings.thanksText=$('#thanksText').value.trim();
+  settings.accentColor=$('#accentColor').value;
+  settings.posterTitle=$('#posterTitle').value.trim();
+  settings.posterSubtitle=$('#posterSubtitle').value.trim();
+  settings.catalogTitle=$('#catalogTitle').value.trim();
+  settings.backgroundMode=$('#backgroundMode').value;
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+  setAccent(settings.accentColor);
+  renderAll();
+  alert('Beállítások elmentve.');
+};
+$('#accentColor').oninput=e=>setAccent(e.target.value);
 
-$('#backupBtn').onclick=async()=>{const data={version:3,settings,products,assets},blob=new Blob([JSON.stringify(data)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='pm-dekor-mentes.json';a.click();URL.revokeObjectURL(a.href)};
-$('#restoreInput').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text());if(!data.products)throw new Error();await clearStore(STORE);await clearStore(ASSETS);for(const p of data.products){const copy={...p};delete copy.id;await add(STORE,copy)}if(data.assets?.logo)await put(ASSETS,{key:'logo',value:data.assets.logo});if(data.assets?.background)await put(ASSETS,{key:'background',value:data.assets.background});settings={...defaults,...(data.settings||{})};localStorage.setItem(SETTINGS,JSON.stringify(settings));loadSettingsUi();await refresh();alert('Mentés betöltve.')}catch{alert('A fájlt nem sikerült betölteni.')}};
-$('#clearBtn').onclick=async()=>{if(!confirm('Biztosan törlöd az összes terméket és képet?'))return;await clearStore(STORE);await clearStore(ASSETS);selectedId=null;await refresh()};
+$('#logoInput').onchange=async e=>{
+  const file=e.target.files[0];
+  if(!file) return;
+  assets.logo=await fileToData(file,1000,.9);
+  await dbPut(ASSET_STORE,{key:'logo',value:assets.logo});
+  renderAll();
+};
+$('#removeLogoBtn').onclick=async()=>{
+  assets.logo='';
+  await dbDelete(ASSET_STORE,'logo');
+  renderAll();
+};
+$('#backgroundInput').onchange=async e=>{
+  const file=e.target.files[0];
+  if(!file) return;
+  assets.background=await fileToData(file,2400,.88);
+  settings.backgroundMode='custom';
+  $('#backgroundMode').value='custom';
+  await dbPut(ASSET_STORE,{key:'background',value:assets.background});
+  renderAll();
+};
+$('#removeBackgroundBtn').onclick=async()=>{
+  assets.background='';
+  settings.backgroundMode='template';
+  $('#backgroundMode').value='template';
+  await dbDelete(ASSET_STORE,'background');
+  renderAll();
+};
+function renderAssetPreviews(){
+  $('#logoPreview').innerHTML=assets.logo ? `<img src="${assets.logo}" alt="PM Dekor logó">` : 'Nincs saját logó – a szöveges PM logó látszik.';
+}
 
-function demoImg(label,w=1000,h=700,c1='#c8b493',c2='#765846'){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d'),g=x.createLinearGradient(0,0,w,h);g.addColorStop(0,c1);g.addColorStop(1,c2);x.fillStyle=g;x.fillRect(0,0,w,h);x.fillStyle='rgba(255,255,255,.86)';x.beginPath();x.ellipse(w/2,h/2,w*.28,h*.3,0,0,Math.PI*2);x.fill();x.fillStyle='#654b3d';x.textAlign='center';x.font=`bold ${Math.max(30,w*.045)}px Georgia`;x.fillText(label,w/2,h*.48);x.font=`${Math.max(18,w*.025)}px Georgia`;x.fillText('SAJÁT FOTÓ HELYE',w/2,h*.56);return c.toDataURL('image/jpeg',.85)}
-$('#demoBtn').onclick=async()=>{if(products.length&&!confirm('A mintaadatok hozzáadódnak a meglévőkhöz. Folytatod?'))return;const d=[['Teamécseses dísz','600 Ft','TEAMÉCSESSEL',900,1200,'contain'],['LED mécseses dísz','800 Ft','LED MÉCSESSEL',1200,800,'cover'],['Szív alakú dísz','1 600 Ft','TEAMÉCSESSEL',1000,750,'cover'],['LED szív dísz','1 800 Ft','LED MÉCSESSEL',750,1100,'contain'],['Galambos és virágos szív','2 300 Ft','SZÍV ALAKÚ',1400,800,'cover'],['Angyalkás sírdísz','2 500 Ft','ANGYALKÁS',800,1200,'contain'],['Kereszt alakú sírdísz','1 100 Ft','KERESZT',850,1200,'contain'],['Nagy méretű sírtál','3 200 Ft','NAGY SÍRTÁL',1500,850,'cover'],['Nagy szív alakú dísz','3 200 Ft','NAGY SZÍV',1000,1000,'cover']];for(let i=0;i<d.length;i++){const [name,price,category,w,h,frameMode]=d[i];await add(STORE,norm({name,price,category,description:'Kézzel készített dekoráció.',onPoster:true,image:demoImg(name,w,h),frameMode,scale:100,offsetX:0,offsetY:0,order:products.length+i}))}await refresh()};
+$('#backupBtn').onclick=()=>{
+  const payload={version:5,settings,assets,products};
+  const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='pm-dekor-mentes.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('#restoreInput').onchange=async e=>{
+  const file=e.target.files[0];
+  if(!file) return;
+  try{
+    const data=JSON.parse(await file.text());
+    await dbClear(PRODUCT_STORE);
+    await dbClear(ASSET_STORE);
+    for(const product of (data.products||[])){
+      const copy={...product};
+      delete copy.id;
+      await dbAdd(PRODUCT_STORE,copy);
+    }
+    if(data.assets?.logo) await dbPut(ASSET_STORE,{key:'logo',value:data.assets.logo});
+    if(data.assets?.background) await dbPut(ASSET_STORE,{key:'background',value:data.assets.background});
+    settings={...defaults,...(data.settings||{})};
+    localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+    selectedId=null;
+    await refresh();
+    loadSettingsUi();
+    alert('Mentés sikeresen betöltve.');
+  }catch{
+    alert('Nem sikerült beolvasni a mentést.');
+  }
+};
+$('#clearBtn').onclick=async()=>{
+  if(!confirm('Biztosan törlöd az összes terméket és feltöltött logót/hátteret?')) return;
+  await dbClear(PRODUCT_STORE);
+  await dbClear(ASSET_STORE);
+  selectedId=null;
+  await refresh();
+};
 
-function fit(){const ww=window.innerWidth;if(ww>=980){$$('.poster-classic,.poster-modern,.catalog-page').forEach(el=>{el.style.transform='';el.style.marginBottom=''});return}const avail=Math.max(280,ww-30);$$('.poster-classic').forEach(el=>{const s=Math.min(1,avail/1000);el.style.transform=`scale(${s})`;el.style.marginBottom=`${-(el.offsetHeight*(1-s))}px`});$$('.poster-modern').forEach(el=>{const s=Math.min(1,avail/900);el.style.transform=`scale(${s})`;el.style.marginBottom=`${-(el.offsetHeight*(1-s))}px`});$$('.catalog-page').forEach(el=>{const s=Math.min(1,avail/794);el.style.transform=`scale(${s})`;el.style.marginBottom=`${-(el.offsetHeight*(1-s))}px`})}window.onresize=()=>setTimeout(fit,80);
+['posterTitle','posterSubtitle','backgroundMode'].forEach(id=>$('#'+id).addEventListener('input',renderPoster));
+['catalogTitle','itemsPerPage','catalogCategory'].forEach(id=>$('#'+id).addEventListener('input',renderCatalog));
+$('#searchInput').oninput=renderProducts;
 
-(async()=>{loadSettingsUi();await refresh();setTimeout(fit,100)})();
+$$('.tab').forEach(tab=>{
+  tab.onclick=()=>{
+    $$('.tab').forEach(t=>t.classList.remove('active'));
+    $$('.view').forEach(v=>v.classList.remove('active'));
+    tab.classList.add('active');
+    $('#view-'+tab.dataset.tab).classList.add('active');
+    setTimeout(fitPreviews,60);
+  };
+});
+
+$('#exportPosterBtn').onclick=async()=>{
+  const btn=$('#exportPosterBtn');
+  btn.disabled=true; btn.textContent='Készül…';
+  try{
+    const el=$('#posterCanvas').firstElementChild;
+    const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#fffaf0'});
+    const a=document.createElement('a');
+    a.download='pm-dekor-plakat.png';
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  }finally{
+    btn.disabled=false; btn.textContent='Plakát letöltése PNG-ben';
+  }
+};
+$('#exportCatalogBtn').onclick=async()=>{
+  const btn=$('#exportCatalogBtn');
+  btn.disabled=true; btn.textContent='PDF készül…';
+  try{
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const pages=$$('.catalog-page');
+    for(let i=0;i<pages.length;i++){
+      const canvas=await html2canvas(pages[i],{scale:1.5,useCORS:true,backgroundColor:'#fffaf0'});
+      if(i>0) pdf.addPage();
+      pdf.addImage(canvas.toDataURL('image/jpeg',.92),'JPEG',0,0,210,297);
+    }
+    pdf.save('pm-dekor-katalogus.pdf');
+  }finally{
+    btn.disabled=false; btn.textContent='Katalógus letöltése PDF-ben';
+  }
+};
+
+function demoCanvas(label,w,h,c1,c2){
+  const canvas=document.createElement('canvas');
+  canvas.width=w; canvas.height=h;
+  const ctx=canvas.getContext('2d');
+  const grad=ctx.createLinearGradient(0,0,w,h);
+  grad.addColorStop(0,c1); grad.addColorStop(1,c2);
+  ctx.fillStyle=grad; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle='rgba(255,255,255,.88)';
+  ctx.beginPath();
+  ctx.ellipse(w/2,h/2,w*0.28,h*0.28,0,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle='#654b3d';
+  ctx.textAlign='center';
+  ctx.font=`bold ${Math.max(28,Math.round(w*0.045))}px Georgia`;
+  ctx.fillText(label,w/2,h*0.48);
+  ctx.font=`${Math.max(18,Math.round(w*0.022))}px Georgia`;
+  ctx.fillText('minta saját fotó helyett',w/2,h*0.58);
+  return canvas.toDataURL('image/jpeg',.88);
+}
+$('#demoBtn').onclick=async()=>{
+  if(products.length && !confirm('A mintaadatok hozzáadódnak a meglévőkhöz. Folytatod?')) return;
+  const demo=[
+    ['Kis teamécseses','600 Ft','SIMA TEAMÉCSESSEL',900,1200,'contain','#d8c4a5','#87674e'],
+    ['Kis LED mécseses','800 Ft','LED MÉCSESSEL',1200,800,'cover','#d9b786','#8f5c3c'],
+    ['Szív teamécseses','1 600 Ft','TEAMÉCSESSEL',1000,740,'cover','#c8c5b4','#7e715d'],
+    ['Szív LED mécseses','1 800 Ft','LED MÉCSESSEL',780,1140,'contain','#d2bca7','#7b5d53'],
+    ['Galambos szív','2 300 Ft','GALAMBOS',1400,850,'cover','#c9d1be','#77705d'],
+    ['Virágos szív','2 300 Ft','VIRÁGOS',850,1220,'contain','#dfd3c5','#9b8371'],
+    ['Angyalkás bal','2 500 Ft','ANGYALKÁS',760,1180,'contain','#bfcbac','#6f6a5e'],
+    ['Angyalkás jobb','2 500 Ft','ANGYALKÁS',1350,860,'cover','#dcc6aa','#8f614a'],
+    ['Kereszt alakú dísz','1 100 Ft','KERESZT ALAKÚ',760,1180,'contain','#c7d3b0','#6d735d'],
+    ['Nagy sírtál','3 200 Ft','NAGY DÍSZ',1350,860,'cover','#dac5aa','#90634a'],
+    ['Nagy szív alakú dísz','3 200 Ft','NAGY SZÍV',1100,850,'cover','#d6c0b1','#7c5b5d']
+  ];
+  for(let i=0;i<demo.length;i++){
+    const [name,price,category,w,h,frameMode,c1,c2]=demo[i];
+    await dbAdd(PRODUCT_STORE,normProduct({
+      name,price,category,description:'Kézzel készített dekoráció.',onPoster:true,
+      image:demoCanvas(name,w,h,c1,c2),frameMode,scale:100,offsetX:0,offsetY:0,order:products.length+i
+    }));
+  }
+  await refresh();
+};
+
+function fitPreviews(){
+  const ww=window.innerWidth;
+  if(ww>=980){
+    $$('.poster,.catalog-page').forEach(el=>{el.style.transform='';el.style.marginBottom='';});
+    return;
+  }
+  const available=Math.max(280,ww-32);
+  $$('.poster').forEach(el=>{
+    const scale=Math.min(1,available/1000);
+    el.style.transform=`scale(${scale})`;
+    el.style.marginBottom=`${-(el.offsetHeight*(1-scale))}px`;
+  });
+  $$('.catalog-page').forEach(el=>{
+    const scale=Math.min(1,available/794);
+    el.style.transform=`scale(${scale})`;
+    el.style.marginBottom=`${-(el.offsetHeight*(1-scale))}px`;
+  });
+}
+window.addEventListener('resize',()=>setTimeout(fitPreviews,100));
+
+(async()=>{
+  loadSettingsUi();
+  await refresh();
+  setTimeout(fitPreviews,120);
+})();
