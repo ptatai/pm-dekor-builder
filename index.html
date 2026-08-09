@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#67151f">
+  <title>PM Dekor – Plakát és katalógus szerkesztő v3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="app-header">
+  <div>
+    <div class="eyebrow">PM DEKOR</div>
+    <h1>Plakát és katalógus szerkesztő <span>v3</span></h1>
+  </div>
+  <div class="header-actions">
+    <button class="btn soft" id="demoBtn">Mintaadatok</button>
+    <button class="btn soft" id="backupBtn">Mentés fájlba</button>
+    <label class="btn soft file-btn">Mentés betöltése<input id="restoreInput" type="file" accept=".json,application/json"></label>
+    <button class="btn danger" id="clearBtn">Minden törlése</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="products">Termékek</button>
+  <button class="tab" data-tab="poster">Plakát</button>
+  <button class="tab" data-tab="catalog">Katalógus</button>
+  <button class="tab" data-tab="settings">Beállítások</button>
+</nav>
+
+<main>
+<section class="view active" id="view-products">
+  <div class="layout products-layout">
+    <aside class="panel sticky">
+      <h2>Új termék</h2>
+      <form id="productForm">
+        <label>Kép<input id="imageInput" type="file" accept="image/*" required></label>
+        <div class="thumb-preview" id="thumbPreview">Nincs kiválasztott kép</div>
+        <label>Terméknév<input id="nameInput" required placeholder="Pl. Szív alakú sírdísz"></label>
+        <label>Ár<input id="priceInput" required placeholder="Pl. 1 800 Ft"></label>
+        <label>Kategória<input id="categoryInput" placeholder="Pl. Angyalkás"></label>
+        <label>Rövid leírás<textarea id="descInput" rows="3" placeholder="Pl. LED mécsessel, fehér virágokkal"></textarea></label>
+        <label class="check"><input id="posterInput" type="checkbox" checked><span>Kerüljön a plakátra</span></label>
+        <div class="mini-box">
+          <h3>Képkezelés</h3>
+          <label>Megjelenítés
+            <select id="frameModeInput">
+              <option value="cover">Kitöltés</option>
+              <option value="contain">Teljes kép</option>
+            </select>
+          </label>
+          <label>Nagyítás<input id="scaleInput" type="range" min="50" max="220" value="100"><small id="scaleValue">100%</small></label>
+          <label>Vízszintes pozíció<input id="offsetXInput" type="range" min="-160" max="160" value="0"><small id="offsetXValue">0</small></label>
+          <label>Függőleges pozíció<input id="offsetYInput" type="range" min="-160" max="160" value="0"><small id="offsetYValue">0</small></label>
+        </div>
+        <button class="btn primary" type="submit">+ Termék hozzáadása</button>
+      </form>
+    </aside>
+
+    <section class="panel">
+      <div class="section-head">
+        <div><h2>Termékek</h2><p class="muted" id="productCount">0 termék</p></div>
+        <input id="searchInput" class="search" type="search" placeholder="Keresés…">
+      </div>
+      <div id="productList" class="product-list"></div>
+    </section>
+  </div>
+</section>
+
+<section class="view" id="view-poster">
+  <div class="layout preview-layout">
+    <aside class="panel sticky">
+      <h2>Plakát</h2>
+      <label>Sablon
+        <select id="posterTemplate">
+          <option value="classic">PM Dekor Classic – az eredetihez hasonló</option>
+          <option value="cards">Modern kártyás</option>
+        </select>
+      </label>
+      <label>Cím<input id="posterTitle" value="Mindenszenteki sírdíszek"></label>
+      <label>Alcím<input id="posterSubtitle" value="Kézzel készített, szeretettel díszítve"></label>
+
+      <div class="mini-box">
+        <h3>Háttér</h3>
+        <label>Háttér mód
+          <select id="backgroundMode">
+            <option value="template">Beépített sablon</option>
+            <option value="custom">Saját háttérkép</option>
+          </select>
+        </label>
+        <label class="file-line">Saját háttér feltöltása<input id="backgroundInput" type="file" accept="image/*"></label>
+        <button class="btn tiny" id="removeBackgroundBtn" type="button">Saját háttér törlése</button>
+      </div>
+
+      <div class="mini-box">
+        <h3>Kijelölt kép igazítása</h3>
+        <p class="muted" id="selectedProductText">Kattints egy termékképre a plakáton.</p>
+        <label>Mód
+          <select id="selectedFrameMode" disabled>
+            <option value="cover">Kitöltés</option>
+            <option value="contain">Teljes kép</option>
+          </select>
+        </label>
+        <label>Zoom<input id="selectedScale" type="range" min="50" max="220" value="100" disabled><small id="selectedScaleValue">100%</small></label>
+        <label>Bal / jobb<input id="selectedX" type="range" min="-160" max="160" value="0" disabled><small id="selectedXValue">0</small></label>
+        <label>Fel / le<input id="selectedY" type="range" min="-160" max="160" value="0" disabled><small id="selectedYValue">0</small></label>
+        <button class="btn tiny" id="resetSelectedBtn" type="button" disabled>Igazítás alaphelyzetbe</button>
+        <p class="note">A képet közvetlenül is megfoghatod és húzhatod a plakáton.</p>
+      </div>
+
+      <button class="btn primary" id="exportPosterBtn">Plakát letöltése PNG-ben</button>
+    </aside>
+
+    <div class="preview-scroll">
+      <div id="posterCanvas"></div>
+    </div>
+  </div>
+</section>
+
+<section class="view" id="view-catalog">
+  <div class="layout preview-layout">
+    <aside class="panel sticky">
+      <h2>Katalógus</h2>
+      <label>Cím<input id="catalogTitle" value="Mindenszenteki kollekció"></label>
+      <label>Termék / oldal
+        <select id="itemsPerPage">
+          <option value="4">4</option>
+          <option value="6" selected>6</option>
+          <option value="8">8</option>
+        </select>
+      </label>
+      <label>Kategória<select id="catalogCategory"><option value="">Minden kategória</option></select></label>
+      <button class="btn primary" id="exportCatalogBtn">Katalógus letöltése PDF-ben</button>
+    </aside>
+    <div class="preview-scroll"><div id="catalogCanvas" class="catalog-stack"></div></div>
+  </div>
+</section>
+
+<section class="view" id="view-settings">
+  <div class="panel settings">
+    <h2>Arculat</h2>
+    <div class="form-grid">
+      <label>Márkanév<input id="brandName" value="PM Dekor Melinda"></label>
+      <label>Facebook<input id="facebook" value="PM Dekor Melinda"></label>
+      <label>Instagram<input id="instagram" value="@pmdekor_melinda"></label>
+      <label>Rendelési szöveg<input id="orderText" value="Rendelés üzenetben!"></label>
+      <label>Köszönet szöveg<input id="thanksText" value="Köszönöm, hogy támogatod a kézzel készült alkotásokat!"></label>
+      <label>Fő szín<input id="accentColor" type="color" value="#741521"></label>
+    </div>
+    <div class="mini-box">
+      <h3>Logó</h3>
+      <label>Logó feltöltása<input id="logoInput" type="file" accept="image/*"></label>
+      <div id="logoPreview" class="logo-preview">Nincs saját logó – a PM Dekor szöveges logó jelenik meg.</div>
+      <button class="btn tiny" id="removeLogoBtn">Saját logó törlése</button>
+    </div>
+    <button class="btn primary" id="saveSettingsBtn">Beállítások mentése</button>
+  </div>
+</section>
+</main>
+
+<template id="productCardTemplate">
+  <article class="manage-card">
+    <div class="manage-thumb media-frame"><img alt=""></div>
+    <div class="manage-main">
+      <div class="manage-top">
+        <div><h3 class="manage-name"></h3><div class="manage-category muted"></div></div>
+        <strong class="manage-price"></strong>
+      </div>
+      <p class="manage-desc"></p>
+      <div class="badge-row"><span class="mode-badge"></span><span class="zoom-badge"></span></div>
+      <label class="check compact"><input class="manage-poster" type="checkbox"><span>Plakáton</span></label>
+    </div>
+    <div class="manage-actions">
+      <button class="icon-btn up">↑</button>
+      <button class="icon-btn down">↓</button>
+      <button class="icon-btn edit">✎</button>
+      <button class="icon-btn delete">×</button>
+    </div>
+  </article>
+</template>
+
+<div class="modal hidden" id="editModal">
+  <div class="modal-card">
+    <div class="modal-head"><h2>Termék szerkesztése</h2><button class="icon-btn" id="closeModalBtn">×</button></div>
+    <form id="editForm">
+      <input id="editId" type="hidden">
+      <label>Terméknév<input id="editName" required></label>
+      <label>Ár<input id="editPrice" required></label>
+      <label>Kategória<input id="editCategory"></label>
+      <label>Leírás<textarea id="editDesc" rows="3"></textarea></label>
+      <label class="check"><input id="editPoster" type="checkbox"><span>Kerüljön a plakátra</span></label>
+      <label>Megjelenítés<select id="editMode"><option value="cover">Kitöltés</option><option value="contain">Teljes kép</option></select></label>
+      <label>Zoom<input id="editScale" type="range" min="50" max="220"><small id="editScaleValue"></small></label>
+      <label>Bal / jobb<input id="editX" type="range" min="-160" max="160"><small id="editXValue"></small></label>
+      <label>Fel / le<input id="editY" type="range" min="-160" max="160"><small id="editYValue"></small></label>
+      <label>Új kép<input id="editImage" type="file" accept="image/*"></label>
+      <div class="edit-preview media-frame" id="editPreview"><img alt=""></div>
+      <button class="btn primary" type="submit">Mentés</button>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
