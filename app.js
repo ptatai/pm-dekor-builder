@@ -286,6 +286,8 @@ async function refresh(){
   renderAll();
 }
 function renderAll(){
+  ensurePosterRows();
+  pruneLayoutProductIds();
   renderProducts();
   populateCategories();
   renderRowEditor();
@@ -543,12 +545,14 @@ function ensurePosterRows(){
     id:row.id||uid('row'),
     align:['left','center','right','spread'].includes(row.align)?row.align:'center',
     blocks:(Array.isArray(row.blocks)?row.blocks:[]).map(block=>{
-      const units=Math.max(1,Math.min(3,Number(block.units)||1));
-      const ids=Array.isArray(block.productIds)?block.productIds.slice(0,units):[];
-      while(ids.length<units) ids.push(null);
+      const units=Math.max(1,Math.min(4,Number(block.units)||1));
+      const imageCount=Math.max(1,Math.min(3,Number(block.imageCount)||Math.min(units,3)));
+      const ids=Array.isArray(block.productIds)?block.productIds.slice(0,imageCount):[];
+      while(ids.length<imageCount) ids.push(null);
       return {
         id:block.id||uid('block'),
         units,
+        imageCount,
         title:block.title||'',
         priceLabel:block.priceLabel||'',
         variant:block.variant||'classic',
@@ -560,16 +564,41 @@ function ensurePosterRows(){
 function rowUsedUnits(row){
   return (row.blocks||[]).reduce((sum,b)=>sum+(Number(b.units)||1),0);
 }
-function createBlock(units=1){
-  units=Math.max(1,Math.min(3,Number(units)||1));
-  return {id:uid('block'),units,title:'',priceLabel:'',variant:'classic',productIds:Array(units).fill(null)};
+function createBlock(units=1,imageCount=1){
+  units=Math.max(1,Math.min(4,Number(units)||1));
+  imageCount=Math.max(1,Math.min(3,Number(imageCount)||1));
+  return {id:uid('block'),units,imageCount,title:'',priceLabel:'',variant:'classic',productIds:Array(imageCount).fill(null)};
 }
 function createRow(unitsList=[1]){
-  return {id:uid('row'),align:'center',blocks:unitsList.map(createBlock)};
+  return {id:uid('row'),align:'center',blocks:unitsList.map(units=>createBlock(units,Math.min(units,3)))};
 }
 function savePosterRows(){
   ensurePosterRows();
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+}
+
+function pruneLayoutProductIds(){
+  const valid=new Set(products.map(p=>p.id));
+  let changed=false;
+  ensurePosterRows();
+  settings.posterRows.forEach(row=>row.blocks.forEach(block=>{
+    block.productIds=(block.productIds||[]).map(id=>{
+      if(id && !valid.has(Number(id))){ changed=true; return null; }
+      return id ? Number(id) : null;
+    });
+  }));
+  if(changed) savePosterRows();
+}
+function updatePosterLiveStatus(text='Előnézet frissítve'){
+  const el=$('#posterLiveStatus');
+  if(!el) return;
+  el.textContent=text;
+  el.classList.add('pulse');
+  clearTimeout(updatePosterLiveStatus._t);
+  updatePosterLiveStatus._t=setTimeout(()=>{
+    el.textContent='Élő plakát-előnézet';
+    el.classList.remove('pulse');
+  },900);
 }
 function getLayoutProductPool(){
   return products.filter(p=>p.onPoster);
@@ -617,29 +646,39 @@ function renderRowEditor(){
         ${(row.blocks||[]).map((block,blockIndex)=>`
           <div class="row-block-editor" data-block-id="${block.id}">
             <div class="block-editor-top">
-              <label>Blokk
+              <label>Szélesség
                 <select class="block-units-select">
-                  <option value="1" ${block.units===1?'selected':''}>1 képes</option>
-                  <option value="2" ${block.units===2?'selected':''}>2 képes</option>
-                  <option value="3" ${block.units===3?'selected':''}>3 képes</option>
+                  <option value="1" ${block.units===1?'selected':''}>1× normál</option>
+                  <option value="2" ${block.units===2?'selected':''}>2× dupla</option>
+                  <option value="3" ${block.units===3?'selected':''}>3× széles</option>
+                  <option value="4" ${block.units===4?'selected':''}>4× teljes sor</option>
+                </select>
+              </label>
+              <label>Képek
+                <select class="block-image-count-select">
+                  <option value="1" ${(block.imageCount||1)===1?'selected':''}>1 kép</option>
+                  <option value="2" ${(block.imageCount||1)===2?'selected':''}>2 kép</option>
+                  <option value="3" ${(block.imageCount||1)===3?'selected':''}>3 kép</option>
                 </select>
               </label>
               <label>Típus
                 <select class="block-variant-select">
-                  <option value="classic" ${(block.variant||'classic')==='classic'?'selected':''}>Klasszikus plakát</option>
+                  <option value="classic" ${(block.variant||'classic')==='classic'?'selected':''}>Klasszikus</option>
                   <option value="airy" ${(block.variant||'classic')==='airy'?'selected':''}>Szellős</option>
                 </select>
               </label>
+              <button class="icon-btn remove-layout-block" type="button" title="Blokk törlése">×</button>
+            </div>
+            <div class="block-editor-texts">
               <label>Közös cím
                 <input class="block-title-input" value="${esc(block.title)}" placeholder="Automatikus, ha üres">
               </label>
               <label>Közös ár / ársáv
                 <input class="block-price-input" value="${esc(block.priceLabel)}" placeholder="Automatikus, ha üres">
               </label>
-              <button class="icon-btn remove-layout-block" type="button" title="Blokk törlése">×</button>
             </div>
-            <div class="block-slot-selects cols-${block.units}">
-              ${Array.from({length:block.units},(_,slotIndex)=>`
+            <div class="block-slot-selects cols-${block.imageCount||1}">
+              ${Array.from({length:block.imageCount||1},(_,slotIndex)=>`
                 <label>${slotIndex+1}. kép
                   <select class="block-product-select" data-slot-index="${slotIndex}">
                     ${productSelectOptions(block.productIds?.[slotIndex])}
@@ -650,10 +689,11 @@ function renderRowEditor(){
       </div>
 
       <div class="row-add-blocks">
-        <span class="note">Blokk hozzáadása:</span>
-        <button class="btn tiny add-layout-block" data-units="1" type="button" ${used+1>4?'disabled':''}>+ 1</button>
-        <button class="btn tiny add-layout-block" data-units="2" type="button" ${used+2>4?'disabled':''}>+ 2</button>
-        <button class="btn tiny add-layout-block" data-units="3" type="button" ${used+3>4?'disabled':''}>+ 3</button>
+        <span class="note">Új blokk:</span>
+        <button class="btn tiny add-layout-block" data-units="1" type="button" ${used+1>4?'disabled':''}>+ Normál</button>
+        <button class="btn tiny add-layout-block" data-units="2" type="button" ${used+2>4?'disabled':''}>+ Dupla</button>
+        <button class="btn tiny add-layout-block" data-units="3" type="button" ${used+3>4?'disabled':''}>+ Tripla</button>
+        <button class="btn tiny add-layout-block" data-units="4" type="button" ${used+4>4?'disabled':''}>+ Teljes sor</button>
       </div>
     </article>`;
   }).join('');
@@ -667,15 +707,15 @@ function renderRowEditor(){
     card.querySelector('.row-up').onclick=()=>{
       const idx=settings.posterRows.findIndex(r=>r.id===rowId); if(idx<=0)return;
       pushHistory(); [settings.posterRows[idx-1],settings.posterRows[idx]]=[settings.posterRows[idx],settings.posterRows[idx-1]];
-      savePosterRows(); renderAll();
+      savePosterRows(); renderAll(); updatePosterLiveStatus('Sor mozgatva');
     };
     card.querySelector('.row-down').onclick=()=>{
       const idx=settings.posterRows.findIndex(r=>r.id===rowId); if(idx<0||idx>=settings.posterRows.length-1)return;
       pushHistory(); [settings.posterRows[idx+1],settings.posterRows[idx]]=[settings.posterRows[idx],settings.posterRows[idx+1]];
-      savePosterRows(); renderAll();
+      savePosterRows(); renderAll(); updatePosterLiveStatus('Sor mozgatva');
     };
     card.querySelector('.row-delete').onclick=()=>{
-      pushHistory(); settings.posterRows=settings.posterRows.filter(r=>r.id!==rowId); savePosterRows(); renderAll();
+      pushHistory(); settings.posterRows=settings.posterRows.filter(r=>r.id!==rowId); savePosterRows(); renderAll(); updatePosterLiveStatus('Sor törölve');
     };
 
     card.querySelectorAll('.row-block-editor').forEach(blockEl=>{
@@ -684,30 +724,38 @@ function renderRowEditor(){
       blockEl.querySelector('.block-units-select').onchange=e=>{
         const next=Number(e.target.value);
         const otherUnits=rowUsedUnits(row)-block.units;
-        if(otherUnits+next>4){ alert('Egy sor legfeljebb 4 egység lehet.'); e.target.value=block.units; return; }
+        if(otherUnits+next>4){ alert('Egy sor legfeljebb 4 szélességi egység lehet.'); e.target.value=block.units; return; }
         pushHistory();
         block.units=next;
+        savePosterRows(); renderAll();
+        updatePosterLiveStatus('Blokk szélessége frissítve');
+      };
+      blockEl.querySelector('.block-image-count-select').onchange=e=>{
+        const next=Math.max(1,Math.min(3,Number(e.target.value)||1));
+        pushHistory();
+        block.imageCount=next;
         block.productIds=(block.productIds||[]).slice(0,next);
         while(block.productIds.length<next) block.productIds.push(null);
         savePosterRows(); renderAll();
+        updatePosterLiveStatus('Képszám frissítve');
       };
       blockEl.querySelector('.block-variant-select').onchange=e=>{
-        pushHistory(); block.variant=e.target.value; savePosterRows(); renderPoster();
+        pushHistory(); block.variant=e.target.value; savePosterRows(); renderPoster(); updatePosterLiveStatus('Blokktípus frissítve');
       };
       blockEl.querySelector('.block-title-input').onchange=e=>{
-        pushHistory(); block.title=e.target.value.trim(); savePosterRows(); renderPoster();
+        pushHistory(); block.title=e.target.value.trim(); savePosterRows(); renderPoster(); updatePosterLiveStatus('Cím frissítve');
       };
       blockEl.querySelector('.block-price-input').onchange=e=>{
-        pushHistory(); block.priceLabel=e.target.value.trim(); savePosterRows(); renderPoster();
+        pushHistory(); block.priceLabel=e.target.value.trim(); savePosterRows(); renderPoster(); updatePosterLiveStatus('Ár frissítve');
       };
       blockEl.querySelector('.remove-layout-block').onclick=()=>{
-        pushHistory(); row.blocks=row.blocks.filter(b=>b.id!==blockId); savePosterRows(); renderAll();
+        pushHistory(); row.blocks=row.blocks.filter(b=>b.id!==blockId); savePosterRows(); renderAll(); updatePosterLiveStatus('Blokk törölve');
       };
       blockEl.querySelectorAll('.block-product-select').forEach(sel=>{
         sel.onchange=e=>{
           pushHistory();
           block.productIds[Number(e.target.dataset.slotIndex)] = e.target.value ? Number(e.target.value) : null;
-          savePosterRows(); renderPoster();
+          savePosterRows(); renderPoster(); updatePosterLiveStatus('Termék cserélve');
         };
       });
     });
@@ -716,7 +764,7 @@ function renderRowEditor(){
       btn.onclick=()=>{
         const units=Number(btn.dataset.units);
         if(rowUsedUnits(row)+units>4) return;
-        pushHistory(); row.blocks.push(createBlock(units)); savePosterRows(); renderAll();
+        pushHistory(); row.blocks.push(createBlock(units,1)); savePosterRows(); renderAll(); updatePosterLiveStatus('Új blokk hozzáadva');
       };
     });
   });
@@ -735,27 +783,24 @@ function autoAssignLayoutProducts(){
   let cursor=0;
   pushHistory();
   settings.posterRows.forEach(row=>row.blocks.forEach(block=>{
-    block.productIds=Array.from({length:block.units},()=>pool[cursor++]?.id ?? null);
+    const count=Math.max(1,Math.min(3,Number(block.imageCount)||1));
+    block.productIds=Array.from({length:count},()=>pool[cursor++]?.id ?? null);
   }));
   savePosterRows();
   renderAll();
+  updatePosterLiveStatus('Termékek kiosztva');
 }
 function layoutHasAnyAssignment(){
   ensurePosterRows();
   return settings.posterRows.some(row=>row.blocks.some(block=>(block.productIds||[]).some(Boolean)));
 }
 function ensureInitialLayoutAssignments(){
-  if(products.length && !layoutHasAnyAssignment()){
-    const pool=getLayoutProductPool();
-    let cursor=0;
-    settings.posterRows.forEach(row=>row.blocks.forEach(block=>{
-      block.productIds=Array.from({length:block.units},()=>pool[cursor++]?.id ?? null);
-    }));
-    savePosterRows();
-  }
+  // V7.4: nincs rejtett automatikus kiosztás.
+  // A szerkesztő és az előnézet mindig ugyanazt a settings.posterRows állapotot használja.
 }
 function blockProducts(block){
-  return Array.from({length:block.units},(_,i)=>products.find(p=>p.id===Number(block.productIds?.[i])) || null);
+  const count=Math.max(1,Math.min(3,Number(block.imageCount)||1));
+  return Array.from({length:count},(_,i)=>products.find(p=>p.id===Number(block.productIds?.[i])) || null);
 }
 function automaticBlockPrice(block){
   const values=blockProducts(block).filter(Boolean).map(p=>p.price).filter(Boolean);
@@ -779,6 +824,7 @@ function renderV7Block(block,rowUsed,align){
   const title=(block.title||'').trim() || automaticBlockTitle(block);
   const price=(block.priceLabel||'').trim() || automaticBlockPrice(block);
   const variant=block.variant || 'classic';
+  const imageCount=Math.max(1,Math.min(3,Number(block.imageCount)||1));
   const widthStyle=align==='spread' ? `width:${block.units/4*100}%` : `flex:${block.units} 1 0`;
 
   const cellMarkup = items.map((p,idx)=>{
@@ -803,7 +849,7 @@ function renderV7Block(block,rowUsed,align){
       <div class="v7-block-price">${esc(price)}</div>
       <div class="v7-block-title">${esc(title)}</div>
     </div>
-    <div class="v7-block-media slots-${block.units}">
+    <div class="v7-block-media slots-${imageCount}">
       ${cellMarkup}
     </div>
   </div>`;
@@ -833,7 +879,6 @@ function renderPoster(){
   settings.posterSubtitle=$('#posterSubtitle').value;
   settings.backgroundMode=$('#backgroundMode').value;
   ensurePosterRows();
-  ensureInitialLayoutAssignments();
 
   const host=$('#posterCanvas');
   host.innerHTML=`<section class="poster" style="${posterBackgroundStyle()}">
@@ -1295,7 +1340,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"7.3",settings,assets,products};
+  const payload={version:"7.4",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);

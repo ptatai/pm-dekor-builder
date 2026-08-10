@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#6d1720">
-  <title>PM Dekor – Plakát és katalógus szerkesztő v7.3</title>
+  <title>PM Dekor – Plakát és katalógus szerkesztő v7.4</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div>
     <div class="eyebrow">PM DEKOR</div>
-    <h1>Plakát és katalógus szerkesztő <span class="version">v7.3</span></h1>
+    <h1>Plakát és katalógus szerkesztő <span class="version">v7.4</span></h1>
   </div>
   <div class="runtime-status" id="runtimeStatus">JavaScript indul…</div><div class="header-actions">
     <button class="btn soft" id="demoBtn">Mintaadatok</button>
@@ -133,7 +133,8 @@
           <div class="v7-editor-title">
             <div>
               <h3>V7 – Sor- és blokkszerkesztő</h3>
-              <p class="note">Egy sor legfeljebb 4 egység. Az 1 / 2 / 3 azt jelenti, hány képes és milyen széles blokk kerüljön oda. A sor lehet csonka is.</p>
+              <p class="note">Egy sor legfeljebb 4 szélességi egység. A blokk <strong>szélessége</strong> és a benne lévő <strong>képek száma</strong> most már külön állítható.</p>
+              <div class="live-preview-note"><span class="live-dot"></span><span id="posterLiveStatus">Élő plakát-előnézet</span></div>
             </div>
             <button class="btn tiny" type="button" id="autoAssignLayoutBtn">Termékek automatikus kiosztása</button>
           </div>
@@ -145,6 +146,7 @@
             <button class="btn tiny layout-preset" type="button" data-preset="1,1,1">+ 3 × 1 csonka</button>
             <button class="btn tiny layout-preset" type="button" data-preset="2,1">+ 2 + 1 csonka</button>
             <button class="btn tiny layout-preset" type="button" data-preset="1">+ 1 blokk</button>
+            <button class="btn tiny layout-preset" type="button" data-preset="4">+ 1 teljes széles kép</button>
           </div>
 
           <div id="rowEditorList" class="row-editor-list"></div>
