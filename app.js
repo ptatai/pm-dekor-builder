@@ -4,8 +4,8 @@ window.addEventListener('error', function(e){
   if(el){ el.textContent='Hiba: '+(e.message||'JavaScript hiba'); el.classList.add('bad'); }
 });
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const DB_NAME='pm-dekor-v6', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v6';
-let products=[], pendingImage='', selectedId=null, dragState=null, undoStack=[], redoStack=[], previewMode=false;
+const DB_NAME='pm-dekor-v61', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v61';
+let products=[], pendingImage='', pendingImageMeta=null, selectedId=null, dragState=null, undoStack=[], redoStack=[], previewMode=false, cropState=null;
 
 const defaults={
   brandName:'PM Dekor Melinda',
@@ -77,7 +77,7 @@ async function dbClear(store){
 }
 
 function normProduct(p){
-  return {category:'',description:'',onPoster:true,frameMode:'cover',scale:100,offsetX:0,offsetY:0,order:999,...p};
+  return {category:'',description:'',onPoster:true,frameMode:'auto',scale:100,offsetX:0,offsetY:0,order:999,imageWidth:null,imageHeight:null,...p};
 }
 function esc(s=''){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
 function setAccent(hex){
@@ -111,8 +111,139 @@ function fileToData(file,max=1800,quality=.88){
     reader.readAsDataURL(file);
   });
 }
-function mediaModeClass(p){ return p.frameMode==='contain' ? 'contain' : 'cover'; }
 function mediaTransform(p){ return `translate(calc(-50% + ${p.offsetX||0}px), calc(-50% + ${p.offsetY||0}px)) scale(${(p.scale||100)/100})`; }
+
+function getImageMetaFromData(dataUrl){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>resolve({width:img.width,height:img.height});
+    img.onerror=reject;
+    img.src=dataUrl;
+  });
+}
+function getSlotKindByPosterIndex(idx){
+  if(idx>=0 && idx<=3) return 'small';
+  if(idx>=4 && idx<=7) return 'big';
+  if(idx>=8 && idx<=10) return 'bottom';
+  return 'generic';
+}
+function getProductSlotKind(id){
+  const ids=selectedProducts().map(p=>p.id);
+  return getSlotKindByPosterIndex(ids.indexOf(id));
+}
+function getTargetRatio(kind='generic'){
+  return {generic:1.15,small:0.99,big:0.77,bottom:1.01}[kind] || 1;
+}
+function getSmartImageRecommendation(width,height,targetKind='generic'){
+  const ar=(width&&height)?width/height:1;
+  const target=getTargetRatio(targetKind);
+  let recommendation='Normál arányú kép';
+  let suggested='cover';
+  if(ar>target*1.55){ suggested='contain'; recommendation='Nagyon széles kép – AUTO módban a „Teljes kép” ajánlott.'; }
+  else if(ar<target*0.72){ suggested='contain'; recommendation='Nagyon magas / álló kép – AUTO módban a „Teljes kép” ajánlott.'; }
+  else if(ar>1.85){ suggested='contain'; recommendation='Panorámás / kollázs jellegű kép – finomabb vágás javasolt.'; }
+  else if(ar<0.82){ suggested='contain'; recommendation='Álló jellegű kép – érdemes óvatosabban vágni.'; }
+  return {aspect:ar,suggested,recommendation};
+}
+function getSmartDefaults(width,height,targetKind='generic'){
+  const rec=getSmartImageRecommendation(width,height,targetKind);
+  let scale=100, offsetX=0, offsetY=0;
+  if(rec.suggested==='contain'){
+    if(rec.aspect>1.9 || rec.aspect<0.62) scale=92;
+    else scale=96;
+  }else{
+    if(Math.abs(rec.aspect-getTargetRatio(targetKind))>.5) scale=108;
+  }
+  return {frameMode:'auto',scale,offsetX,offsetY,recommendation:rec.recommendation};
+}
+function getEffectiveFrameMode(p, targetKind='generic'){
+  const mode=p.frameMode || 'cover';
+  if(mode!=='auto') return mode;
+  const rec=getSmartImageRecommendation(p.imageWidth||0,p.imageHeight||0,targetKind);
+  return rec.suggested;
+}
+function mediaModeClass(p,targetKind='generic'){
+  return getEffectiveFrameMode(p,targetKind)==='contain' ? 'contain' : 'cover';
+}
+
+
+function syncCropLabels(){
+  if(!cropState) return;
+  $('#cropScaleValue').textContent=$('#cropScale').value+'%';
+  $('#cropXValue').textContent=$('#cropX').value;
+  $('#cropYValue').textContent=$('#cropY').value;
+}
+function renderCropPreview(){
+  if(!cropState) return;
+  cropState.targetKind=$('#cropTargetKind').value;
+  cropState.frameMode=$('#cropFrameMode').value;
+  cropState.scale=Number($('#cropScale').value);
+  cropState.offsetX=Number($('#cropX').value);
+  cropState.offsetY=Number($('#cropY').value);
+  const preview=$('#cropPreview');
+  preview.className='crop-preview media-frame '+mediaModeClass(cropState,cropState.targetKind)+' '+cropState.targetKind;
+  preview.querySelector('img').src=cropState.image;
+  preview.querySelector('img').style.transform=mediaTransform(cropState);
+  const rec=getSmartImageRecommendation(cropState.imageWidth,cropState.imageHeight,cropState.targetKind);
+  $('#cropMeta').innerHTML=`Méret: <strong>${cropState.imageWidth} × ${cropState.imageHeight}</strong><br>${esc(rec.recommendation)}<div class="crop-recommend">Ajánlott cél: ${cropState.targetKind==='small'?'felső kisebb blokk':cropState.targetKind==='big'?'középső magasabb blokk':cropState.targetKind==='bottom'?'alsó blokk':'általános'}</div>`;
+  syncCropLabels();
+}
+function applySmartCropDefaults(){
+  if(!cropState) return;
+  const smart=getSmartDefaults(cropState.imageWidth,cropState.imageHeight,$('#cropTargetKind').value);
+  $('#cropFrameMode').value='auto';
+  $('#cropScale').value=smart.scale;
+  $('#cropX').value=smart.offsetX;
+  $('#cropY').value=smart.offsetY;
+  renderCropPreview();
+}
+function openCropModal(config){
+  cropState={...config};
+  $('#cropTargetKind').value=config.targetKind || 'generic';
+  const smart=getSmartDefaults(config.imageWidth,config.imageHeight,config.targetKind||'generic');
+  $('#cropFrameMode').value=config.frameMode || smart.frameMode;
+  $('#cropScale').value=config.scale ?? smart.scale;
+  $('#cropX').value=config.offsetX ?? smart.offsetX;
+  $('#cropY').value=config.offsetY ?? smart.offsetY;
+  renderCropPreview();
+  $('#cropModal').classList.remove('hidden');
+}
+function closeCropModal(){
+  cropState=null;
+  $('#cropModal').classList.add('hidden');
+}
+async function commitCropModal(){
+  if(!cropState) return;
+  const payload={
+    image:cropState.image,
+    imageWidth:cropState.imageWidth,
+    imageHeight:cropState.imageHeight,
+    frameMode:$('#cropFrameMode').value,
+    scale:Number($('#cropScale').value),
+    offsetX:Number($('#cropX').value),
+    offsetY:Number($('#cropY').value)
+  };
+  if(cropState.mode==='new'){
+    pendingImage=payload.image;
+    pendingImageMeta={width:payload.imageWidth,height:payload.imageHeight};
+    $('#thumbPreview').innerHTML=`<img src="${payload.image}" alt="">`;
+    $('#frameModeInput').value=payload.frameMode;
+    $('#scaleInput').value=payload.scale;
+    $('#offsetXInput').value=payload.offsetX;
+    $('#offsetYInput').value=payload.offsetY;
+    updateAddLabels();
+  }else if(cropState.mode==='replace-product'){
+    const p=products.find(x=>x.id===cropState.productId);
+    if(p){
+      pushHistory();
+      Object.assign(p,payload);
+      await dbPut(PRODUCT_STORE,p);
+      selectedId=p.id;
+      await refresh();
+    }
+  }
+  closeCropModal();
+}
 
 async function loadAssets(){
   const rows=await dbGetAll(ASSET_STORE);
@@ -250,13 +381,13 @@ function renderPosterUi(){
     <span class="toolbar-title">${esc(p.name)}</span>
     <button class="tool-btn" type="button" data-act="zoomout">− Zoom</button>
     <button class="tool-btn" type="button" data-act="zoomin">+ Zoom</button>
-    <button class="tool-btn" type="button" data-act="togglemode">${p.frameMode==='cover' ? 'Teljes kép' : 'Kitöltés'}</button>
+    <button class="tool-btn" type="button" data-act="togglemode">${p.frameMode==='auto' ? 'AUTO' : (p.frameMode==='cover' ? 'Teljes kép' : 'Kitöltés')}</button>
     <button class="tool-btn" type="button" data-act="replace">Csere</button>
     <button class="tool-btn" type="button" data-act="reset">Reset</button>
   `;
   toolbar.querySelector('[data-act="zoomout"]').onclick=async()=>{ pushHistory(); p.scale=Math.max(50,(p.scale||100)-10); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
   toolbar.querySelector('[data-act="zoomin"]').onclick=async()=>{ pushHistory(); p.scale=Math.min(220,(p.scale||100)+10); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
-  toolbar.querySelector('[data-act="togglemode"]').onclick=async()=>{ pushHistory(); p.frameMode=p.frameMode==='cover' ? 'contain' : 'cover'; await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
+  toolbar.querySelector('[data-act="togglemode"]').onclick=async()=>{ pushHistory(); p.frameMode=p.frameMode==='auto' ? 'cover' : (p.frameMode==='cover' ? 'contain' : 'auto'); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
   toolbar.querySelector('[data-act="replace"]').onclick=()=>{ const inp=$('#replaceImageInput'); if(inp){ inp.value=''; inp.click(); } };
   toolbar.querySelector('[data-act="reset"]').onclick=async()=>{ pushHistory(); p.frameMode='cover'; p.scale=100; p.offsetX=0; p.offsetY=0; await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
   updateHistoryButtons();
@@ -301,7 +432,7 @@ function singleSlotMarkup(p,size,type){
     : `<span class="ribbon">${esc(p.price)}</span><div class="label">${esc(p.name)}</div>`;
   return `<div class="product-slot">
     <div class="slot-head">${head}</div>
-    <div class="${photoClass} media-frame ${mediaModeClass(p)}" data-product-id="${p.id}">
+    <div class="${photoClass} media-frame ${mediaModeClass(p,size)}" data-product-id="${p.id}" data-slot-kind="${size}">
       <img src="${p.image}" alt="">
     </div>
   </div>`;
@@ -317,7 +448,7 @@ function combinedSlotMarkup(items,size,type,title,priceLabel){
         <div class="combo-mini-price">${esc(p.price)}</div>
         <div class="combo-mini-label">${esc(p.category || p.name)}</div>
       </div>
-      <div class="combo-media media-frame ${mediaModeClass(p)}" data-product-id="${p.id}">
+      <div class="combo-media media-frame ${mediaModeClass(p,size)}" data-product-id="${p.id}" data-slot-kind="${size}">
         <img src="${p.image}" alt="">
       </div>
     </div>`;
@@ -443,8 +574,17 @@ function attachPosterDrag(scope){
       const id=Number(frame.dataset.productId);
       const p=products.find(x=>x.id===id);
       if(!p) return;
+      const image=await fileToData(file);
+      const meta=await getImageMetaFromData(image);
+      const smart=getSmartDefaults(meta.width,meta.height,frame.dataset.slotKind || getProductSlotKind(id));
       pushHistory();
-      p.image=await fileToData(file);
+      p.image=image;
+      p.imageWidth=meta.width;
+      p.imageHeight=meta.height;
+      p.frameMode='auto';
+      p.scale=smart.scale;
+      p.offsetX=0;
+      p.offsetY=0;
       selectedId=id;
       await dbPut(PRODUCT_STORE,p);
       renderAll();
@@ -453,7 +593,7 @@ function attachPosterDrag(scope){
 }
 function updateSelectedControls(){
   const p=products.find(x=>x.id===selectedId);
-  ['selectedFrameMode','selectedScale','selectedX','selectedY','resetSelectedBtn'].forEach(id=>$('#'+id).disabled=!p);
+  ['selectedFrameMode','selectedScale','selectedX','selectedY','resetSelectedBtn','smartSelectedBtn'].forEach(id=>$('#'+id).disabled=!p);
   if(!p){
     $('#selectedProductText').textContent='Kattints egy képre a plakáton.';
     $('#selectedScaleValue').textContent='100%';
@@ -486,6 +626,15 @@ async function changeSelectedProduct(){
   renderAll();
 }
 ['selectedFrameMode','selectedScale','selectedX','selectedY'].forEach(id=>{ $('#'+id).addEventListener('pointerdown', ()=>{ if(selectedId) pushHistory(); }, {passive:true}); $('#'+id).addEventListener('input',changeSelectedProduct); });
+$('#smartSelectedBtn').onclick=async()=>{
+  const p=products.find(x=>x.id===selectedId);
+  if(!p) return;
+  pushHistory();
+  const smart=getSmartDefaults(p.imageWidth||1000,p.imageHeight||1000,getProductSlotKind(p.id));
+  p.frameMode='auto'; p.scale=smart.scale; p.offsetX=0; p.offsetY=0;
+  await dbPut(PRODUCT_STORE,p);
+  renderAll();
+};
 $('#resetSelectedBtn').onclick=async()=>{
   pushHistory();
   const p=products.find(x=>x.id===selectedId);
@@ -516,7 +665,7 @@ function renderCatalog(){
       <div class="catalog-grid">
         ${page.length ? page.map(p=>`
           <article class="catalog-card">
-            <div class="catalog-photo media-frame ${mediaModeClass(p)}" data-product-id="${p.id}">
+            <div class="catalog-photo media-frame ${mediaModeClass(p,'generic')}" data-product-id="${p.id}">
               <img src="${p.image}" alt="">
             </div>
             <div class="catalog-body">
@@ -556,14 +705,15 @@ function renderProducts(){
   shown.forEach(p=>{
     const node=$('#productCardTemplate').content.cloneNode(true);
     const frame=node.querySelector('.manage-thumb');
-    frame.classList.add(mediaModeClass(p));
+    frame.classList.add(mediaModeClass(p,'generic'));
     frame.dataset.productId=p.id;
     frame.querySelector('img').src=p.image;
     node.querySelector('.manage-name').textContent=p.name;
     node.querySelector('.manage-category').textContent=p.category || 'Nincs kategória';
     node.querySelector('.manage-price').textContent=p.price;
     node.querySelector('.manage-desc').textContent=p.description || '';
-    node.querySelector('.mode-badge').textContent=p.frameMode==='contain' ? 'Teljes kép' : 'Kitöltés';
+    node.querySelector('.mode-badge').textContent=p.frameMode==='auto' ? 'AUTO' : (p.frameMode==='contain' ? 'Teljes kép' : 'Kitöltés');
+    node.querySelector('.mode-badge').classList.toggle('auto', p.frameMode==='auto');
     node.querySelector('.zoom-badge').textContent=`Zoom ${p.scale}%`;
     const cb=node.querySelector('.manage-poster');
     cb.checked=p.onPoster;
@@ -606,7 +756,7 @@ function openEdit(p){
   $('#editX').value=p.offsetX;
   $('#editY').value=p.offsetY;
   $('#editImage').value='';
-  $('#editPreview').className='edit-preview media-frame '+mediaModeClass(p);
+  $('#editPreview').className='edit-preview media-frame '+mediaModeClass(p,'generic');
   $('#editPreview img').src=p.image;
   $('#editPreview img').style.transform=mediaTransform(p);
   updateEditLabels();
@@ -617,7 +767,7 @@ function updateEditLabels(){
   $('#editScaleValue').textContent=tmp.scale+'%';
   $('#editXValue').textContent=tmp.offsetX;
   $('#editYValue').textContent=tmp.offsetY;
-  $('#editPreview').className='edit-preview media-frame '+$('#editMode').value;
+  const tmpMode=$('#editMode').value==='auto' ? 'contain' : $('#editMode').value; $('#editPreview').className='edit-preview media-frame '+tmpMode;
   $('#editPreview img').style.transform=mediaTransform(tmp);
 }
 ['editMode','editScale','editX','editY'].forEach(id=>$('#'+id).addEventListener('input',updateEditLabels));
@@ -626,7 +776,12 @@ $('#editModal').onclick=e=>{ if(e.target.id==='editModal') $('#editModal').class
 $('#editImage').onchange=async e=>{
   const file=e.target.files[0];
   if(!file) return;
-  $('#editPreview img').src=await fileToData(file);
+  const data=await fileToData(file);
+  $('#editPreview img').src=data;
+  const meta=await getImageMetaFromData(data);
+  $('#editPreview').dataset.newImage=data;
+  $('#editPreview').dataset.newWidth=meta.width;
+  $('#editPreview').dataset.newHeight=meta.height;
 };
 $('#editForm').onsubmit=async e=>{
   pushHistory();
@@ -643,7 +798,7 @@ $('#editForm').onsubmit=async e=>{
   p.offsetX=Number($('#editX').value);
   p.offsetY=Number($('#editY').value);
   const file=$('#editImage').files[0];
-  if(file) p.image=await fileToData(file);
+  if(file){ p.image=$('#editPreview').dataset.newImage || await fileToData(file); p.imageWidth=Number($('#editPreview').dataset.newWidth)||p.imageWidth; p.imageHeight=Number($('#editPreview').dataset.newHeight)||p.imageHeight; }
   await dbPut(PRODUCT_STORE,p);
   $('#editModal').classList.add('hidden');
   await refresh();
@@ -659,8 +814,9 @@ function updateAddLabels(){
 $('#imageInput').onchange=async e=>{
   const file=e.target.files[0];
   if(!file) return;
-  pendingImage=await fileToData(file);
-  $('#thumbPreview').innerHTML=`<img src="${pendingImage}" alt="">`;
+  const image=await fileToData(file);
+  const meta=await getImageMetaFromData(image);
+  openCropModal({mode:'new',image,imageWidth:meta.width,imageHeight:meta.height,targetKind:'generic'});
 };
 $('#productForm').onsubmit=async e=>{
   pushHistory();
@@ -673,6 +829,8 @@ $('#productForm').onsubmit=async e=>{
     description:$('#descInput').value.trim(),
     onPoster:$('#posterInput').checked,
     image:pendingImage,
+    imageWidth:pendingImageMeta?.width || null,
+    imageHeight:pendingImageMeta?.height || null,
     frameMode:$('#frameModeInput').value,
     scale:Number($('#scaleInput').value),
     offsetX:Number($('#offsetXInput').value),
@@ -681,9 +839,10 @@ $('#productForm').onsubmit=async e=>{
   }));
   e.target.reset();
   pendingImage='';
+  pendingImageMeta=null;
   $('#thumbPreview').textContent='Nincs kiválasztott kép';
   $('#posterInput').checked=true;
-  $('#frameModeInput').value='cover';
+  $('#frameModeInput').value='auto';
   $('#scaleInput').value=100;
   $('#offsetXInput').value=0;
   $('#offsetYInput').value=0;
@@ -755,7 +914,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"6.0",settings,assets,products};
+  const payload={version:"6.1",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -819,12 +978,48 @@ $('#replaceImageInput').onchange=async e=>{
   if(!file || !selectedId) return;
   const p=products.find(x=>x.id===selectedId);
   if(!p) return;
-  pushHistory();
-  p.image=await fileToData(file);
-  await dbPut(PRODUCT_STORE,p);
-  renderAll();
+  const image=await fileToData(file);
+  const meta=await getImageMetaFromData(image);
+  openCropModal({
+    mode:'replace-product',
+    productId:p.id,
+    image,
+    imageWidth:meta.width,
+    imageHeight:meta.height,
+    targetKind:getProductSlotKind(p.id),
+    frameMode:'auto'
+  });
   e.target.value='';
 };
+
+
+$('#cropTargetKind').oninput=()=>{ if(cropState) applySmartCropDefaults(); };
+$('#cropFrameMode').oninput=renderCropPreview;
+['cropScale','cropX','cropY'].forEach(id=>$('#'+id).oninput=renderCropPreview);
+$('#cropAutoBtn').onclick=applySmartCropDefaults;
+$('#cropResetBtn').onclick=applySmartCropDefaults;
+$('#cropCancelBtn').onclick=closeCropModal;
+$('#closeCropModalBtn').onclick=closeCropModal;
+$('#cropSaveBtn').onclick=commitCropModal;
+$('#cropModal').onclick=e=>{ if(e.target.id==='cropModal') closeCropModal(); };
+$('#cropPreview').onpointerdown=e=>{
+  if(!cropState) return;
+  const preview=$('#cropPreview');
+  const startX=e.clientX, startY=e.clientY;
+  const baseX=Number($('#cropX').value), baseY=Number($('#cropY').value);
+  const move=ev=>{
+    $('#cropX').value=Math.max(-200,Math.min(200,Math.round(baseX + (ev.clientX-startX))));
+    $('#cropY').value=Math.max(-200,Math.min(200,Math.round(baseY + (ev.clientY-startY))));
+    renderCropPreview();
+  };
+  const up=()=>{
+    window.removeEventListener('pointermove',move);
+    window.removeEventListener('pointerup',up);
+  };
+  window.addEventListener('pointermove',move);
+  window.addEventListener('pointerup',up);
+};
+
 
 $('#exportPosterBtn').onclick=async()=>{
   const btn=$('#exportPosterBtn');

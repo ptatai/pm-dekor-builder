@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#6d1720">
-  <title>PM Dekor – Plakát és katalógus szerkesztő v6</title>
+  <title>PM Dekor – Plakát és katalógus szerkesztő v6.1</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div>
     <div class="eyebrow">PM DEKOR</div>
-    <h1>Plakát és katalógus szerkesztő <span class="version">v6</span></h1>
+    <h1>Plakát és katalógus szerkesztő <span class="version">v6.1</span></h1>
   </div>
   <div class="runtime-status" id="runtimeStatus">JavaScript indul…</div><div class="header-actions">
     <button class="btn soft" id="demoBtn">Mintaadatok</button>
@@ -44,9 +44,10 @@
           <label class="check"><input id="posterInput" type="checkbox" checked><span>Kerüljön a plakátra</span></label>
 
           <div class="mini-box">
-            <h3>Képkezelés</h3>
+            <h3>Képkezelés</h3><p class="note">Az AUTO mód megpróbálja értelmesen kezelni a nagyon széles, nagyon magas vagy kollázs jellegű fotókat is.</p>
             <label>Megjelenítés
               <select id="frameModeInput">
+                <option value="auto">AUTO – intelligens</option>
                 <option value="cover">Kitöltés</option>
                 <option value="contain">Teljes kép</option>
               </select>
@@ -106,8 +107,9 @@
           <p class="muted" id="selectedProductText">Kattints egy képre a plakáton.</p>
           <label>Mód
             <select id="selectedFrameMode" disabled>
-              <option value="cover">Kitöltés</option>
-              <option value="contain">Teljes kép</option>
+              <option value="auto">AUTO – intelligens</option>
+                <option value="cover">Kitöltés</option>
+                <option value="contain">Teljes kép</option>
             </select>
           </label>
           <label>Zoom
@@ -122,7 +124,7 @@
             <input id="selectedY" type="range" min="-160" max="160" value="0" disabled>
             <small id="selectedYValue">0</small>
           </label>
-          <button class="btn tiny" type="button" id="resetSelectedBtn" disabled>Igazítás alaphelyzetbe</button>
+          <div class="quick-actions two"><button class="btn tiny" type="button" id="smartSelectedBtn" disabled>AUTO igazítás</button><button class="btn tiny" type="button" id="resetSelectedBtn" disabled>Igazítás alaphelyzetbe</button></div>
           <p class="note">A képet közvetlenül is megfoghatod és húzhatod.</p>
         </div>
 
@@ -244,8 +246,9 @@
       <label class="check"><input id="editPoster" type="checkbox"><span>Kerüljön a plakátra</span></label>
       <label>Megjelenítés
         <select id="editMode">
-          <option value="cover">Kitöltés</option>
-          <option value="contain">Teljes kép</option>
+          <option value="auto">AUTO – intelligens</option>
+                <option value="cover">Kitöltés</option>
+                <option value="contain">Teljes kép</option>
         </select>
       </label>
       <label>Zoom
@@ -264,6 +267,65 @@
       <div id="editPreview" class="edit-preview media-frame"><img alt=""></div>
       <button class="btn primary" type="submit">Mentés</button>
     </form>
+  </div>
+</div>
+
+
+<div class="modal hidden" id="cropModal">
+  <div class="modal-card modal-crop-card">
+    <div class="modal-head">
+      <h2>Intelligens képfeltöltés / illesztés</h2>
+      <button class="icon-btn" id="closeCropModalBtn">×</button>
+    </div>
+    <div class="crop-layout">
+      <div class="crop-left">
+        <div class="crop-preview-shell">
+          <div id="cropPreview" class="crop-preview media-frame cover generic">
+            <img alt="">
+          </div>
+        </div>
+        <p class="note" id="cropHint">Húzd az előnézeten belül a képet, vagy állítsd a csúszkákkal.</p>
+      </div>
+      <div class="crop-right">
+        <div class="mini-box">
+          <h3>Automatikus felismerés</h3>
+          <p class="crop-meta" id="cropMeta">A program elemzi a képarányt.</p>
+          <button class="btn tiny" type="button" id="cropAutoBtn">AUTO beállítás alkalmazása</button>
+        </div>
+        <label>Előnézeti blokk
+          <select id="cropTargetKind">
+            <option value="generic">Általános</option>
+            <option value="small">Felső kisebb blokk</option>
+            <option value="big">Középső magasabb blokk</option>
+            <option value="bottom">Alsó blokk</option>
+          </select>
+        </label>
+        <label>Megjelenítés
+          <select id="cropFrameMode">
+            <option value="auto">AUTO – intelligens</option>
+            <option value="cover">Kitöltés</option>
+            <option value="contain">Teljes kép</option>
+          </select>
+        </label>
+        <label>Nagyítás
+          <input id="cropScale" type="range" min="50" max="220" value="100">
+          <small id="cropScaleValue">100%</small>
+        </label>
+        <label>Bal / jobb
+          <input id="cropX" type="range" min="-200" max="200" value="0">
+          <small id="cropXValue">0</small>
+        </label>
+        <label>Fel / le
+          <input id="cropY" type="range" min="-200" max="200" value="0">
+          <small id="cropYValue">0</small>
+        </label>
+        <div class="quick-actions two">
+          <button class="btn tiny" type="button" id="cropResetBtn">Vissza alapra</button>
+          <button class="btn tiny" type="button" id="cropCancelBtn">Mégse</button>
+        </div>
+        <button class="btn primary" type="button" id="cropSaveBtn">Mentés és használat</button>
+      </div>
+    </div>
   </div>
 </div>
 

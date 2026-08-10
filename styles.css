@@ -403,3 +403,69 @@ input[type="color"]{height:42px;padding:4px}
     border-radius:18px;
   }
 }
+
+
+.quick-actions.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.crop-layout{
+  display:grid;
+  grid-template-columns:minmax(320px,1fr) 320px;
+  gap:18px;
+  align-items:start;
+}
+.modal-crop-card{width:min(1000px,100%);padding:18px 18px 16px}
+.crop-left{display:grid;gap:10px}
+.crop-preview-shell{
+  min-height:470px;
+  display:grid;
+  place-items:center;
+  background:#f7f0e6;
+  border:1px solid #dfd3c5;
+  border-radius:14px;
+  padding:18px;
+}
+.crop-preview{
+  border:1px solid #cdbda8;
+  border-radius:12px;
+  box-shadow:0 8px 20px rgba(53,35,24,.10);
+  background:#fff8ef;
+  position:relative;
+}
+.crop-preview::after{
+  content:'Előnézet';
+  position:absolute;
+  top:8px;right:8px;
+  background:rgba(255,252,245,.88);
+  border:1px solid #dfd2c4;
+  border-radius:999px;
+  padding:4px 8px;
+  font-size:10px;
+  font-weight:800;
+  color:#695b52;
+}
+.crop-preview.generic{width:340px;height:260px}
+.crop-preview.small{width:235px;height:238px}
+.crop-preview.big{width:235px;height:305px}
+.crop-preview.bottom{width:300px;height:298px}
+.crop-right .btn.primary{margin-top:8px;width:100%}
+.crop-meta{
+  font-size:13px;
+  line-height:1.45;
+  color:#5c5148;
+  margin:0 0 10px;
+}
+.crop-preview.media-frame{cursor:grab}
+.crop-preview.media-frame:active{cursor:grabbing}
+.crop-recommend{
+  display:inline-block;
+  margin-top:6px;
+  font-size:11px;
+  border:1px solid #e1d4c2;
+  background:#fbf5ed;
+  border-radius:999px;
+  padding:4px 8px;
+}
+.mode-badge.auto{background:#efe6ff;border-color:#d5c3ff;color:#5a3e8a}
+@media(max-width:900px){
+  .crop-layout{grid-template-columns:1fr}
+  .crop-preview-shell{min-height:340px}
+}

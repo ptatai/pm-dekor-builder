@@ -1,20 +1,28 @@
-# PM Dekor szerkesztő v6
+# PM Dekor szerkesztő v6.1
 
-A v6 a v5.4 stabil elrendezésére épül, de interaktívabb használatot ad.
+Ez a verzió kifejezetten arra készült, hogy a **következetlenül feltöltött képeket** is jobban kezelje.
 
 ## Újdonságok
-- lebegő gyors eszköztár a kijelölt képnél
-- dupla kattintásos gyors szövegszerkesztés a plakáton
-- Undo / Redo
-- tiszta előnézet kapcsoló
-- képfájl ráhúzása közvetlenül egy plakátos képhelyre
-- kép csere gomb a lebegő eszköztárból
+- **AUTO – intelligens képkezelés** új módként
+- új **Intelligens képfeltöltés / illesztés** ablak
+- a program felismeri, ha a kép:
+  - nagyon széles
+  - nagyon magas / álló
+  - kollázs jellegű
+- feltöltéskor ad egy javasolt alapbeállítást
+- a képet már feltöltéskor lehet:
+  - mozgatni
+  - zoomolni
+  - AUTO / Kitöltés / Teljes kép módra állítani
+- a kijelölt plakátos képnél külön **AUTO igazítás** gomb is van
+- drag & drop képcsere esetén is intelligens alapigazítást kap a kép
 
 ## Fájlok
 - index.html
 - styles.css
 - app.js
 - pm-dekor-background.png
+- README.md
 
 ## Tipp
-GitHub Pages feltöltés után: Ctrl + Shift + R
+Feltöltés után GitHub Pages-en: **Ctrl + Shift + R**
