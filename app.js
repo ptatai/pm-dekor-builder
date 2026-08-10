@@ -1149,8 +1149,14 @@ function applyMediaTransforms(scope=document){
     const p=products.find(x=>x.id===Number(frame.dataset.productId));
     if(!p) return;
     const img=frame.querySelector('img');
-    if(img) img.style.transform=mediaTransform(p);
-    frame.classList.toggle('selected', selectedId===p.id);
+    if(img){
+      if(frame.dataset.slotKind==='catalog'){
+        img.style.transform='translate(-50%, -50%)';
+      }else{
+        img.style.transform=mediaTransform(p);
+      }
+    }
+    frame.classList.toggle('selected', frame.dataset.slotKind!=='catalog' && selectedId===p.id);
   });
 }
 function attachPosterDrag(scope){
@@ -1291,39 +1297,48 @@ function renderCatalog(){
   for(let i=0;i<items.length;i+=perPage) pages.push(items.slice(i,i+perPage));
   if(!pages.length) pages.push([]);
 
+  const density = perPage===4 ? 'catalog-density-4' : perPage===8 ? 'catalog-density-8' : 'catalog-density-6';
+  const bg = typeof getBackgroundSrc==='function' ? getBackgroundSrc() : BUILTIN_POSTER_BG;
+
   $('#catalogCanvas').innerHTML=pages.map((page,index)=>`
-    <section class="catalog-page">
+    <section class="catalog-page ${density}" style="--catalog-bg:url('${bg}')">
+      <div class="catalog-page-wash"></div>
+
       <header class="catalog-head">
         <div class="catalog-brand-group">
           ${catalogLogoMarkup()}
-          <div>
+          <div class="catalog-title-group">
             <div class="brand">${esc(settings.brandName)}</div>
             <h2>${esc(settings.catalogTitle)}</h2>
+            <div class="catalog-subline">${category ? esc(category) : 'Kézzel készített dekorációk'}</div>
           </div>
         </div>
-        <div>${index+1}. oldal</div>
+        <div class="catalog-page-no">${index+1}. oldal</div>
       </header>
+
       <div class="catalog-grid">
         ${page.length ? page.map(p=>`
           <article class="catalog-card">
-            <div class="catalog-photo media-frame ${mediaModeClass(p,'catalog')}" data-product-id="${p.id}" data-slot-kind="catalog">
-              <img src="${p.image}" alt="">
+            <div class="catalog-photo media-frame contain" data-product-id="${p.id}" data-slot-kind="catalog">
+              <img src="${p.image}" alt="${esc(p.name)}">
+              <div class="catalog-price-ribbon">${esc(p.price)}</div>
             </div>
             <div class="catalog-body">
               <small>${esc(p.category||'PM Dekor')}</small>
               <h3>${esc(p.name)}</h3>
-              <p>${esc(p.description||'Kézzel készített dekoráció.')}</p>
-              <div class="catalog-price">${esc(p.price)}</div>
+              ${p.description ? `<p>${esc(p.description)}</p>` : ''}
             </div>
           </article>
-        `).join('') : `<div class="empty" style="grid-column:1/-1">Nincs megjeleníthető termék.</div>`}
+        `).join('') : `<div class="empty catalog-empty">Nincs megjeleníthető termék.</div>`}
       </div>
-      <div class="catalog-foot">
-        <span>${esc(settings.orderText)} • Facebook: ${esc(settings.facebook)}</span>
-        <span>${esc(settings.instagram)}</span>
-      </div>
+
+      <footer class="catalog-foot">
+        <span>${esc(settings.orderText)}</span>
+        <span>Facebook: ${esc(settings.facebook)} &nbsp; • &nbsp; ${esc(settings.instagram)}</span>
+      </footer>
     </section>
   `).join('');
+
   applyMediaTransforms($('#catalogCanvas'));
 }
 function populateCategories(){
@@ -1629,7 +1644,7 @@ document.addEventListener('keydown',e=>{
 });
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"8.0",settings,assets,products};
+  const payload={version:"8.2",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1831,37 +1846,168 @@ function confirmPosterExport(){
   if(issues.emptySlots) lines.push(`• ${issues.emptySlots} üres képhely`);
   if(issues.missingImages) lines.push(`• ${issues.missingImages} hiányzó termékkép`);
   if(settings.hideEmptyOnExport!==false && issues.emptyBlocks){
-    lines.push(`• ${issues.emptyBlocks} teljesen üres blokk exportnál el lesz rejtve`);
+    lines.push(`• ${issues.emptyBlocks} teljesen üres blokk exportnál el lesz rejtve és a sorok újrarendeződnek`);
   }
   lines.push('', 'Így is exportálod?');
   return confirm(lines.join('\n'));
 }
 
-function preparePosterExportClone(clone){
-  clone.querySelectorAll('.poster-toolbar,.logo-resize-handle').forEach(el=>el.remove());
-  clone.querySelectorAll('.logo-disc').forEach(el=>el.classList.remove('logo-selected'));
 
-  if(settings.hideEmptyOnExport!==false){
-    clone.querySelectorAll('.dynamic-poster-row').forEach(row=>{
-      row.querySelectorAll('.v7-block').forEach(block=>{
-        if(!block.querySelector('.media-frame[data-product-id]')){
-          block.remove();
-        }
-      });
+function compactPosterExportClone(clone){
+  if(settings.hideEmptyOnExport===false) return;
 
-      const inner=row.querySelector('.dynamic-row-inner');
-      const blocks=inner ? [...inner.querySelectorAll('.v7-block')] : [];
-      if(!blocks.length){
-        row.remove();
+  const rows=[...clone.querySelectorAll('.dynamic-poster-row')];
+
+  rows.forEach(row=>{
+    const inner=row.querySelector('.dynamic-row-inner');
+    if(!inner) return;
+
+    [...inner.querySelectorAll('.v7-block')].forEach(block=>{
+      const media=block.querySelector('.v7-block-media');
+      if(!media) return;
+
+      // Részben üres blokknál az üres cellák is tűnjenek el.
+      media.querySelectorAll('.v7-empty').forEach(cell=>cell.remove());
+
+      const liveCells=[...media.querySelectorAll('.media-frame[data-product-id]')];
+      if(!liveCells.length){
+        block.remove();
         return;
       }
 
-      const used=blocks.reduce((sum,b)=>sum+(Number(b.dataset.units)||1),0);
-      if(inner && !row.classList.contains('align-spread')){
-        inner.style.width=`${Math.min(100,used/4*100)}%`;
-      }
+      media.classList.remove('slots-1','slots-2','slots-3');
+      media.classList.add(`slots-${Math.min(3,liveCells.length)}`);
+      block.dataset.exportCells=String(liveCells.length);
+    });
+
+    const blocks=[...inner.querySelectorAll('.v7-block')];
+    if(!blocks.length){
+      row.remove();
+      return;
+    }
+
+    // Kevés blokk esetén ne maradjon negyed/fél szélességű "lyukas" sor.
+    const used=blocks.reduce((sum,b)=>sum+(Number(b.dataset.units)||1),0);
+    let targetWidth;
+
+    if(blocks.length===1){
+      const block=blocks[0];
+      const units=Number(block.dataset.units)||1;
+      const cells=Number(block.dataset.exportCells)||1;
+      if(units>=4) targetWidth=100;
+      else if(units===3) targetWidth=84;
+      else if(units===2) targetWidth=cells>=2 ? 76 : 66;
+      else targetWidth=cells>=2 ? 64 : 52;
+    }else{
+      targetWidth=Math.max(88,Math.min(100,(used/4)*100));
+    }
+
+    inner.style.width=`${targetWidth}%`;
+    row.classList.remove('align-left','align-right','align-spread');
+    row.classList.add('align-center','export-balanced-row');
+  });
+
+  const dynamicRows=clone.querySelector('.dynamic-rows');
+  const visibleRows=dynamicRows ? [...dynamicRows.querySelectorAll('.dynamic-poster-row')] : [];
+
+  // 1–3 megmaradó sor ne nyúljon ki függőlegesen az egész plakátra.
+  if(dynamicRows && visibleRows.length && visibleRows.length<=3){
+    const rowHeight=visibleRows.length===1 ? 350 : visibleRows.length===2 ? 342 : 338;
+    dynamicRows.classList.add('export-compact-rows');
+    dynamicRows.style.justifyContent='center';
+    visibleRows.forEach(row=>{
+      row.style.flex=`0 0 ${rowHeight}px`;
+      row.style.minHeight=`${rowHeight}px`;
+      row.style.maxHeight=`${rowHeight}px`;
     });
   }
+}
+
+function loadExportSourceImage(src,cache){
+  if(cache.has(src)) return cache.get(src);
+  const promise=new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>resolve(img);
+    img.onerror=reject;
+    img.src=src;
+  });
+  cache.set(src,promise);
+  return promise;
+}
+
+async function rasterizePosterImagesForExport(clone,pixelRatio=2){
+  const frames=[...clone.querySelectorAll('.media-frame[data-product-id]')]
+    .filter(frame=>frame.dataset.slotKind!=='catalog');
+
+  const imageCache=new Map();
+
+  await Promise.all(frames.map(async frame=>{
+    const p=products.find(x=>Number(x.id)===Number(frame.dataset.productId));
+    const imgNode=frame.querySelector('img');
+    if(!p || !imgNode || !p.image) return;
+
+    const source=await loadExportSourceImage(p.image,imageCache);
+    const rect=frame.getBoundingClientRect();
+    const fw=Math.max(1,rect.width);
+    const fh=Math.max(1,rect.height);
+    const iw=source.naturalWidth || p.imageWidth || 1;
+    const ih=source.naturalHeight || p.imageHeight || 1;
+
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(fw*pixelRatio));
+    canvas.height=Math.max(1,Math.round(fh*pixelRatio));
+
+    const ctx=canvas.getContext('2d');
+    ctx.imageSmoothingEnabled=true;
+    ctx.imageSmoothingQuality='high';
+    ctx.scale(pixelRatio,pixelRatio);
+    ctx.clearRect(0,0,fw,fh);
+
+    const mode=getEffectiveFrameMode(p,'generic');
+    const fitScale=mode==='contain'
+      ? Math.min(fw/iw,fh/ih)
+      : Math.max(fw/iw,fh/ih);
+
+    const drawW=iw*fitScale;
+    const drawH=ih*fitScale;
+    const userScale=Math.max(.1,Number(p.scale||100)/100);
+    const offsetX=Number(p.offsetX||0);
+    const offsetY=Number(p.offsetY||0);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0,0,fw,fh);
+    ctx.clip();
+    ctx.translate(fw/2+offsetX,fh/2+offsetY);
+    ctx.scale(userScale,userScale);
+    ctx.drawImage(source,-drawW/2,-drawH/2,drawW,drawH);
+    ctx.restore();
+
+    imgNode.src=canvas.toDataURL('image/png');
+    imgNode.classList.add('export-raster-img');
+    imgNode.style.setProperty('left','0','important');
+    imgNode.style.setProperty('top','0','important');
+    imgNode.style.setProperty('width','100%','important');
+    imgNode.style.setProperty('height','100%','important');
+    imgNode.style.setProperty('max-width','none','important');
+    imgNode.style.setProperty('max-height','none','important');
+    imgNode.style.setProperty('object-fit','fill','important');
+    imgNode.style.setProperty('transform','none','important');
+  }));
+}
+
+async function preparePosterExportClone(clone,node,scale=2){
+  clone.querySelectorAll('.poster-toolbar,.logo-resize-handle').forEach(el=>el.remove());
+  clone.querySelectorAll('.logo-disc').forEach(el=>el.classList.remove('logo-selected'));
+
+  compactPosterExportClone(clone);
+
+  // A DOM-nak előbb ki kell számolnia a végső export méreteket.
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+
+  // A plakátképeket export előtt raszterizáljuk a tényleges crop/zoom/offset alapján.
+  // Így a html2canvas már nem saját maga próbálja újraértelmezni a CSS transformot.
+  await rasterizePosterImagesForExport(clone,scale);
 }
 
 async function exportElementAsPng(node, fileName, scale=2){
@@ -1873,14 +2019,26 @@ async function exportElementAsPng(node, fileName, scale=2){
   host.style.pointerEvents='none';
   host.style.opacity='1';
   host.style.zIndex='-1';
+
+  // Először az élő nézet összes képe legyen ténylegesen betöltve.
+  await waitForRenderableAssets(node);
+
   const clone=node.cloneNode(true);
   clone.classList.add('clean-preview','export-snapshot');
-  preparePosterExportClone(clone);
   host.appendChild(clone);
   document.body.appendChild(host);
+
   try{
+    await preparePosterExportClone(clone,node,scale);
     await waitForRenderableAssets(clone);
-    const canvas=await html2canvas(clone,{scale,useCORS:true,backgroundColor:'#fffaf0'});
+
+    const canvas=await html2canvas(clone,{
+      scale,
+      useCORS:true,
+      backgroundColor:'#fffaf0',
+      logging:false
+    });
+
     const a=document.createElement('a');
     a.download=fileName;
     a.href=canvas.toDataURL('image/png');

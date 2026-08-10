@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#6d1720">
-  <title>PM Dekor – Plakát és katalógus szerkesztő v8.0</title>
+  <title>PM Dekor – Plakát és katalógus szerkesztő v8.2</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div>
     <div class="eyebrow">PM DEKOR</div>
-    <h1>Plakát és katalógus szerkesztő <span class="version">v8.0</span></h1>
+    <h1>Plakát és katalógus szerkesztő <span class="version">v8.2</span></h1>
   </div>
   <div class="header-right">
     <div class="header-statuses">
@@ -196,9 +196,9 @@
           <h3>Export</h3>
           <label class="check">
             <input id="hideEmptyOnExport" type="checkbox" checked>
-            <span>Üres blokkok elrejtése a kész plakáton</span>
+            <span>Üres helyek elrejtése és automatikus rendezés</span>
           </label>
-          <p class="note">Szerkesztés közben az üres helyek megmaradnak, de exportnál eltűnhetnek.</p>
+          <p class="note">Szerkesztés közben minden hely megmarad. Exportnál az üres képhelyek, blokkok és sorok eltűnnek, a megmaradó tartalom pedig újrarendeződik.</p>
         </div>
 
         <button class="btn primary" id="exportPosterBtn">Plakát letöltése PNG-ben</button>
@@ -218,14 +218,18 @@
         <label>Cím<input id="catalogTitle" value="Mindenszenteki kollekció"></label>
         <label>Termék / oldal
           <select id="itemsPerPage">
-            <option value="4">4</option>
-            <option value="6" selected>6</option>
-            <option value="8">8</option>
+            <option value="4">4 – nagyobb képek</option>
+            <option value="6" selected>6 – ajánlott</option>
+            <option value="8">8 – kompakt</option>
           </select>
         </label>
         <label>Kategória
           <select id="catalogCategory"><option value="">Minden kategória</option></select>
         </label>
+        <div class="mini-box catalog-info-box">
+          <h3>Katalógus nézet</h3>
+          <p class="note">A katalógus mindig a teljes termékfotót mutatja, külön a plakáton beállított crop/eltolástól.</p>
+        </div>
         <button class="btn primary" id="exportCatalogBtn">Katalógus letöltése PDF-ben</button>
       </aside>
       <div class="preview-scroll">
