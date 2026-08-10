@@ -540,26 +540,37 @@ function uid(prefix='id'){
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`;
 }
 function ensurePosterRows(){
-  if(!Array.isArray(settings.posterRows)) settings.posterRows=JSON.parse(JSON.stringify(DEFAULT_POSTER_ROWS));
-  settings.posterRows=settings.posterRows.slice(0,5).map(row=>({
-    id:row.id||uid('row'),
-    align:['left','center','right','spread'].includes(row.align)?row.align:'center',
-    blocks:(Array.isArray(row.blocks)?row.blocks:[]).map(block=>{
-      const units=Math.max(1,Math.min(4,Number(block.units)||1));
-      const imageCount=Math.max(1,Math.min(3,Number(block.imageCount)||Math.min(units,3)));
-      const ids=Array.isArray(block.productIds)?block.productIds.slice(0,imageCount):[];
-      while(ids.length<imageCount) ids.push(null);
-      return {
-        id:block.id||uid('block'),
-        units,
-        imageCount,
-        title:block.title||'',
-        priceLabel:block.priceLabel||'',
-        variant:block.variant||'classic',
-        productIds:ids
-      };
-    })
-  }));
+  if(!Array.isArray(settings.posterRows)){
+    settings.posterRows=JSON.parse(JSON.stringify(DEFAULT_POSTER_ROWS));
+  }
+
+  if(settings.posterRows.length>5){
+    settings.posterRows.splice(5);
+  }
+
+  settings.posterRows.forEach(row=>{
+    if(!row.id) row.id=uid('row');
+    if(!['left','center','right','spread'].includes(row.align)) row.align='center';
+    if(!Array.isArray(row.blocks)) row.blocks=[];
+
+    row.blocks.forEach(block=>{
+      if(!block.id) block.id=uid('block');
+
+      block.units=Math.max(1,Math.min(4,Number(block.units)||1));
+      block.imageCount=Math.max(
+        1,
+        Math.min(3,Number(block.imageCount)||Math.min(block.units,3))
+      );
+
+      if(block.title===undefined || block.title===null) block.title='';
+      if(block.priceLabel===undefined || block.priceLabel===null) block.priceLabel='';
+      if(!['classic','airy'].includes(block.variant)) block.variant='classic';
+
+      if(!Array.isArray(block.productIds)) block.productIds=[];
+      block.productIds=block.productIds.slice(0,block.imageCount).map(id=>id ? Number(id) : null);
+      while(block.productIds.length<block.imageCount) block.productIds.push(null);
+    });
+  });
 }
 function rowUsedUnits(row){
   return (row.blocks||[]).reduce((sum,b)=>sum+(Number(b.units)||1),0);
@@ -702,7 +713,7 @@ function renderRowEditor(){
     const rowId=card.dataset.rowId;
     const row=settings.posterRows.find(r=>r.id===rowId);
     card.querySelector('.row-align-select').onchange=e=>{
-      pushHistory(); row.align=e.target.value; savePosterRows(); renderPoster(); renderRowEditor();
+      pushHistory(); row.align=e.target.value; savePosterRows(); renderAll(); updatePosterLiveStatus('Sor igazítása frissítve');
     };
     card.querySelector('.row-up').onclick=()=>{
       const idx=settings.posterRows.findIndex(r=>r.id===rowId); if(idx<=0)return;
@@ -740,13 +751,13 @@ function renderRowEditor(){
         updatePosterLiveStatus('Képszám frissítve');
       };
       blockEl.querySelector('.block-variant-select').onchange=e=>{
-        pushHistory(); block.variant=e.target.value; savePosterRows(); renderPoster(); updatePosterLiveStatus('Blokktípus frissítve');
+        pushHistory(); block.variant=e.target.value; savePosterRows(); renderAll(); updatePosterLiveStatus('Blokktípus frissítve');
       };
       blockEl.querySelector('.block-title-input').onchange=e=>{
-        pushHistory(); block.title=e.target.value.trim(); savePosterRows(); renderPoster(); updatePosterLiveStatus('Cím frissítve');
+        pushHistory(); block.title=e.target.value.trim(); savePosterRows(); renderAll(); updatePosterLiveStatus('Cím frissítve');
       };
       blockEl.querySelector('.block-price-input').onchange=e=>{
-        pushHistory(); block.priceLabel=e.target.value.trim(); savePosterRows(); renderPoster(); updatePosterLiveStatus('Ár frissítve');
+        pushHistory(); block.priceLabel=e.target.value.trim(); savePosterRows(); renderAll(); updatePosterLiveStatus('Ár frissítve');
       };
       blockEl.querySelector('.remove-layout-block').onclick=()=>{
         pushHistory(); row.blocks=row.blocks.filter(b=>b.id!==blockId); savePosterRows(); renderAll(); updatePosterLiveStatus('Blokk törölve');
@@ -754,8 +765,11 @@ function renderRowEditor(){
       blockEl.querySelectorAll('.block-product-select').forEach(sel=>{
         sel.onchange=e=>{
           pushHistory();
-          block.productIds[Number(e.target.dataset.slotIndex)] = e.target.value ? Number(e.target.value) : null;
-          savePosterRows(); renderPoster(); updatePosterLiveStatus('Termék cserélve');
+          const slotIndex=Number(e.target.dataset.slotIndex);
+          block.productIds[slotIndex] = e.target.value ? Number(e.target.value) : null;
+          savePosterRows();
+          renderAll();
+          updatePosterLiveStatus(e.target.value ? 'Termék felkerült a plakátra' : 'Képhely kiürítve');
         };
       });
     });
@@ -1340,7 +1354,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"7.4",settings,assets,products};
+  const payload={version:"7.5",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);

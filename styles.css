@@ -1056,3 +1056,22 @@ input[type="color"]{height:42px;padding:4px}
     grid-template-columns:1fr;
   }
 }
+
+
+/* V7.5 – szinkronizált szerkesztő / plakát állapot */
+.block-product-select:focus{
+  outline:2px solid rgba(116,21,33,.26);
+  outline-offset:1px;
+}
+#posterLiveStatus.pulse{
+  font-weight:900;
+}
+.poster .v7-media-cell.media-frame img{
+  display:block;
+  opacity:1;
+  visibility:visible;
+  z-index:2;
+}
+.poster .v7-mini-head{
+  z-index:3;
+}
