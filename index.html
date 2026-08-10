@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#6d1720">
-  <title>PM Dekor – Plakát és katalógus szerkesztő v6.3.2</title>
+  <title>PM Dekor – Plakát és katalógus szerkesztő v7.2</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div>
     <div class="eyebrow">PM DEKOR</div>
-    <h1>Plakát és katalógus szerkesztő <span class="version">v6.3</span></h1>
+    <h1>Plakát és katalógus szerkesztő <span class="version">v7</span></h1>
   </div>
   <div class="runtime-status" id="runtimeStatus">JavaScript indul…</div><div class="header-actions">
     <button class="btn soft" id="demoBtn">Mintaadatok</button>
@@ -128,10 +128,33 @@
           <p class="note">A képet közvetlenül is megfoghatod és húzhatod.</p>
         </div>
 
-        <div class="mini-box">
+        
+        <div class="mini-box v7-layout-editor">
+          <div class="v7-editor-title">
+            <div>
+              <h3>V7 – Sor- és blokkszerkesztő</h3>
+              <p class="note">Egy sor legfeljebb 4 egység. Az 1 / 2 / 3 azt jelenti, hány képes és milyen széles blokk kerüljön oda. A sor lehet csonka is.</p>
+            </div>
+            <button class="btn tiny" type="button" id="autoAssignLayoutBtn">Termékek automatikus kiosztása</button>
+          </div>
+
+          <div class="v7-presets">
+            <button class="btn tiny layout-preset" type="button" data-preset="1,1,1,1">+ 4 × 1</button>
+            <button class="btn tiny layout-preset" type="button" data-preset="2,2">+ 2 × 2</button>
+            <button class="btn tiny layout-preset" type="button" data-preset="1,3">+ 1 + 3</button>
+            <button class="btn tiny layout-preset" type="button" data-preset="1,1,1">+ 3 × 1 csonka</button>
+            <button class="btn tiny layout-preset" type="button" data-preset="2,1">+ 2 + 1 csonka</button>
+            <button class="btn tiny layout-preset" type="button" data-preset="1">+ 1 blokk</button>
+          </div>
+
+          <div id="rowEditorList" class="row-editor-list"></div>
+          <p class="note">Maximum 5 sor. Csonka sornál választható balra, középre, jobbra vagy egyenletes elrendezés.</p>
+        </div>
+
+        <div class="mini-box legacy-combo-note">
           <h3>Kombinált blokkok</h3>
           <p class="note">
-            A felső 4 kis blokk és a középső 2 nagy blokk tud 2 képes kombinált nézetet is:
+            A V7-ben már nincs fix felső / középső / alsó blokkszerkezet:
             egy közös cím / szalag, de belül 2 külön termékképpel.
           </p>
         </div>
@@ -288,7 +311,7 @@
       </label>
       <label>Új kép<input id="editImage" type="file" accept="image/*"></label>
       <div id="editPreview" class="edit-preview media-frame"><img alt=""></div>
-      <button class="btn primary" type="submit">Mentés</button>
+      <div class="quick-actions two"><button class="btn tiny" id="editRecropBtn" type="button">Újravágás / crop</button><button class="btn primary" type="submit">Mentés</button></div>
     </form>
   </div>
 </div>

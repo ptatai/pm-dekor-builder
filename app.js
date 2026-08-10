@@ -23,7 +23,34 @@ const defaults={
   logoOffsetX:0,
   logoOffsetY:0
 };
+
+const DEFAULT_POSTER_ROWS=[
+  {
+    id:'row_default_1', align:'center',
+    blocks:[
+      {id:'block_default_1',units:2,title:'KIS SZÍV ALAKÚ SÍRDÍSZEK',priceLabel:'',productIds:[null,null]},
+      {id:'block_default_2',units:2,title:'SZÍV ALAKÚ SÍRDÍSZEK',priceLabel:'',productIds:[null,null]}
+    ]
+  },
+  {
+    id:'row_default_2', align:'center',
+    blocks:[
+      {id:'block_default_3',units:2,title:'GALAMBOS ÉS VIRÁGOS SZÍV ALAKÚ SÍRDÍSZEK',priceLabel:'',productIds:[null,null]},
+      {id:'block_default_4',units:2,title:'ANGYALKÁS SÍRDÍSZEK',priceLabel:'',productIds:[null,null]}
+    ]
+  },
+  {
+    id:'row_default_3', align:'center',
+    blocks:[
+      {id:'block_default_5',units:1,title:'KERESZT ALAKÚ',priceLabel:'',productIds:[null]},
+      {id:'block_default_6',units:1,title:'NAGY DÍSZ',priceLabel:'',productIds:[null]},
+      {id:'block_default_7',units:1,title:'NAGY SZÍV',priceLabel:'',productIds:[null]}
+    ]
+  }
+];
+
 let settings={...defaults,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')};
+if(!Array.isArray(settings.posterRows)) settings.posterRows=JSON.parse(JSON.stringify(DEFAULT_POSTER_ROWS));
 let assets={logo:'',background:''};
 const BUILTIN_POSTER_BG = 'pm-dekor-background.png';
 
@@ -132,8 +159,7 @@ function getSlotKindByPosterIndex(idx){
   return 'generic';
 }
 function getProductSlotKind(id){
-  const ids=selectedProducts().map(p=>p.id);
-  return getSlotKindByPosterIndex(ids.indexOf(id));
+  return 'generic';
 }
 function getTargetRatio(kind='generic'){
   return {generic:1.15,small:0.99,big:0.77,bottom:1.01}[kind] || 1;
@@ -262,6 +288,7 @@ async function refresh(){
 function renderAll(){
   renderProducts();
   populateCategories();
+  renderRowEditor();
   renderPoster();
   renderCatalog();
   renderAssetPreviews();
@@ -306,9 +333,7 @@ async function applySnapshot(snapshot){
   await dbClear(PRODUCT_STORE);
   await dbClear(ASSET_STORE);
   for(const product of (snapshot.products||[])){
-    const copy={...product};
-    delete copy.id;
-    await dbAdd(PRODUCT_STORE,copy);
+    await dbPut(PRODUCT_STORE,{...product});
   }
   if(snapshot.assets?.logo) await dbPut(ASSET_STORE,{key:'logo',value:snapshot.assets.logo});
   if(snapshot.assets?.background) await dbPut(ASSET_STORE,{key:'background',value:snapshot.assets.background});
@@ -387,12 +412,27 @@ function renderPosterUi(){
     <button class="tool-btn" type="button" data-act="zoomout">− Zoom</button>
     <button class="tool-btn" type="button" data-act="zoomin">+ Zoom</button>
     <button class="tool-btn" type="button" data-act="togglemode">${p.frameMode==='auto' ? 'AUTO' : (p.frameMode==='cover' ? 'Teljes kép' : 'Kitöltés')}</button>
+    <button class="tool-btn" type="button" data-act="recrop">Újravágás</button>
     <button class="tool-btn" type="button" data-act="replace">Csere</button>
     <button class="tool-btn" type="button" data-act="reset">Reset</button>
   `;
   toolbar.querySelector('[data-act="zoomout"]').onclick=async()=>{ pushHistory(); p.scale=Math.max(50,(p.scale||100)-10); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
   toolbar.querySelector('[data-act="zoomin"]').onclick=async()=>{ pushHistory(); p.scale=Math.min(220,(p.scale||100)+10); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
   toolbar.querySelector('[data-act="togglemode"]').onclick=async()=>{ pushHistory(); p.frameMode=p.frameMode==='auto' ? 'cover' : (p.frameMode==='cover' ? 'contain' : 'auto'); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
+  toolbar.querySelector('[data-act="recrop"]').onclick=()=>{
+    openCropModal({
+      mode:'replace-product',
+      productId:p.id,
+      image:p.image,
+      imageWidth:p.imageWidth||1000,
+      imageHeight:p.imageHeight||1000,
+      targetKind:'generic',
+      frameMode:p.frameMode,
+      scale:p.scale,
+      offsetX:p.offsetX,
+      offsetY:p.offsetY
+    });
+  };
   toolbar.querySelector('[data-act="replace"]').onclick=()=>{ const inp=$('#replaceImageInput'); if(inp){ inp.value=''; inp.click(); } };
   toolbar.querySelector('[data-act="reset"]').onclick=async()=>{ pushHistory(); p.frameMode='cover'; p.scale=100; p.offsetX=0; p.offsetY=0; await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
   updateHistoryButtons();
@@ -492,7 +532,266 @@ function combinedSlotMarkup(items,size,type,title,priceLabel){
     </div>
   </div>`;
 }
-function selectedProducts(){ return products.filter(p=>p.onPoster).slice(0,13); }
+function selectedProducts(){ return products.filter(p=>p.onPoster); }
+
+function uid(prefix='id'){
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`;
+}
+function ensurePosterRows(){
+  if(!Array.isArray(settings.posterRows)) settings.posterRows=JSON.parse(JSON.stringify(DEFAULT_POSTER_ROWS));
+  settings.posterRows=settings.posterRows.slice(0,5).map(row=>({
+    id:row.id||uid('row'),
+    align:['left','center','right','spread'].includes(row.align)?row.align:'center',
+    blocks:(Array.isArray(row.blocks)?row.blocks:[]).map(block=>{
+      const units=Math.max(1,Math.min(3,Number(block.units)||1));
+      const ids=Array.isArray(block.productIds)?block.productIds.slice(0,units):[];
+      while(ids.length<units) ids.push(null);
+      return {
+        id:block.id||uid('block'),
+        units,
+        title:block.title||'',
+        priceLabel:block.priceLabel||'',
+        productIds:ids
+      };
+    })
+  }));
+}
+function rowUsedUnits(row){
+  return (row.blocks||[]).reduce((sum,b)=>sum+(Number(b.units)||1),0);
+}
+function createBlock(units=1){
+  units=Math.max(1,Math.min(3,Number(units)||1));
+  return {id:uid('block'),units,title:'',priceLabel:'',productIds:Array(units).fill(null)};
+}
+function createRow(unitsList=[1]){
+  return {id:uid('row'),align:'center',blocks:unitsList.map(createBlock)};
+}
+function savePosterRows(){
+  ensurePosterRows();
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+}
+function getLayoutProductPool(){
+  return products.filter(p=>p.onPoster);
+}
+function findLayoutBlock(rowId,blockId){
+  const row=settings.posterRows?.find(r=>r.id===rowId);
+  return {row,block:row?.blocks?.find(b=>b.id===blockId)};
+}
+function productSelectOptions(selected){
+  const options=[`<option value="">— Üres —</option>`];
+  products.forEach(p=>{
+    options.push(`<option value="${p.id}" ${Number(selected)===p.id?'selected':''}>${esc(p.name)} · ${esc(p.price)}</option>`);
+  });
+  return options.join('');
+}
+function renderRowEditor(){
+  const host=$('#rowEditorList');
+  if(!host) return;
+  ensurePosterRows();
+  if(!settings.posterRows.length){
+    host.innerHTML='<div class="empty">Még nincs sor. Válassz fent egy sortípust.</div>';
+    return;
+  }
+  host.innerHTML=settings.posterRows.map((row,rowIndex)=>{
+    const used=rowUsedUnits(row);
+    return `<article class="row-editor-card" data-row-id="${row.id}">
+      <div class="row-editor-head">
+        <div class="row-editor-name">Sor ${rowIndex+1}
+          <span class="row-capacity ${used<4?'partial':''}">${used}/4 ${used<4?'· csonka':''}</span>
+        </div>
+        <select class="row-align-select" aria-label="Sor igazítása">
+          <option value="left" ${row.align==='left'?'selected':''}>Balra</option>
+          <option value="center" ${row.align==='center'?'selected':''}>Középre</option>
+          <option value="right" ${row.align==='right'?'selected':''}>Jobbra</option>
+          <option value="spread" ${row.align==='spread'?'selected':''}>Egyenletes</option>
+        </select>
+        <div class="row-editor-actions">
+          <button class="icon-btn row-up" type="button" title="Sor fel">↑</button>
+          <button class="icon-btn row-down" type="button" title="Sor le">↓</button>
+          <button class="icon-btn row-delete" type="button" title="Sor törlése">×</button>
+        </div>
+      </div>
+
+      <div class="row-block-editor-list">
+        ${(row.blocks||[]).map((block,blockIndex)=>`
+          <div class="row-block-editor" data-block-id="${block.id}">
+            <div class="block-editor-top">
+              <label>Blokk
+                <select class="block-units-select">
+                  <option value="1" ${block.units===1?'selected':''}>1 képes</option>
+                  <option value="2" ${block.units===2?'selected':''}>2 képes</option>
+                  <option value="3" ${block.units===3?'selected':''}>3 képes</option>
+                </select>
+              </label>
+              <label>Közös cím
+                <input class="block-title-input" value="${esc(block.title)}" placeholder="Automatikus, ha üres">
+              </label>
+              <label>Közös ár / ársáv
+                <input class="block-price-input" value="${esc(block.priceLabel)}" placeholder="Automatikus, ha üres">
+              </label>
+              <button class="icon-btn remove-layout-block" type="button" title="Blokk törlése">×</button>
+            </div>
+            <div class="block-slot-selects cols-${block.units}">
+              ${Array.from({length:block.units},(_,slotIndex)=>`
+                <label>${slotIndex+1}. kép
+                  <select class="block-product-select" data-slot-index="${slotIndex}">
+                    ${productSelectOptions(block.productIds?.[slotIndex])}
+                  </select>
+                </label>`).join('')}
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div class="row-add-blocks">
+        <span class="note">Blokk hozzáadása:</span>
+        <button class="btn tiny add-layout-block" data-units="1" type="button" ${used+1>4?'disabled':''}>+ 1</button>
+        <button class="btn tiny add-layout-block" data-units="2" type="button" ${used+2>4?'disabled':''}>+ 2</button>
+        <button class="btn tiny add-layout-block" data-units="3" type="button" ${used+3>4?'disabled':''}>+ 3</button>
+      </div>
+    </article>`;
+  }).join('');
+
+  host.querySelectorAll('.row-editor-card').forEach(card=>{
+    const rowId=card.dataset.rowId;
+    const row=settings.posterRows.find(r=>r.id===rowId);
+    card.querySelector('.row-align-select').onchange=e=>{
+      pushHistory(); row.align=e.target.value; savePosterRows(); renderPoster(); renderRowEditor();
+    };
+    card.querySelector('.row-up').onclick=()=>{
+      const idx=settings.posterRows.findIndex(r=>r.id===rowId); if(idx<=0)return;
+      pushHistory(); [settings.posterRows[idx-1],settings.posterRows[idx]]=[settings.posterRows[idx],settings.posterRows[idx-1]];
+      savePosterRows(); renderAll();
+    };
+    card.querySelector('.row-down').onclick=()=>{
+      const idx=settings.posterRows.findIndex(r=>r.id===rowId); if(idx<0||idx>=settings.posterRows.length-1)return;
+      pushHistory(); [settings.posterRows[idx+1],settings.posterRows[idx]]=[settings.posterRows[idx],settings.posterRows[idx+1]];
+      savePosterRows(); renderAll();
+    };
+    card.querySelector('.row-delete').onclick=()=>{
+      pushHistory(); settings.posterRows=settings.posterRows.filter(r=>r.id!==rowId); savePosterRows(); renderAll();
+    };
+
+    card.querySelectorAll('.row-block-editor').forEach(blockEl=>{
+      const blockId=blockEl.dataset.blockId;
+      const block=row.blocks.find(b=>b.id===blockId);
+      blockEl.querySelector('.block-units-select').onchange=e=>{
+        const next=Number(e.target.value);
+        const otherUnits=rowUsedUnits(row)-block.units;
+        if(otherUnits+next>4){ alert('Egy sor legfeljebb 4 egység lehet.'); e.target.value=block.units; return; }
+        pushHistory();
+        block.units=next;
+        block.productIds=(block.productIds||[]).slice(0,next);
+        while(block.productIds.length<next) block.productIds.push(null);
+        savePosterRows(); renderAll();
+      };
+      blockEl.querySelector('.block-title-input').onchange=e=>{
+        pushHistory(); block.title=e.target.value.trim(); savePosterRows(); renderPoster();
+      };
+      blockEl.querySelector('.block-price-input').onchange=e=>{
+        pushHistory(); block.priceLabel=e.target.value.trim(); savePosterRows(); renderPoster();
+      };
+      blockEl.querySelector('.remove-layout-block').onclick=()=>{
+        pushHistory(); row.blocks=row.blocks.filter(b=>b.id!==blockId); savePosterRows(); renderAll();
+      };
+      blockEl.querySelectorAll('.block-product-select').forEach(sel=>{
+        sel.onchange=e=>{
+          pushHistory();
+          block.productIds[Number(e.target.dataset.slotIndex)] = e.target.value ? Number(e.target.value) : null;
+          savePosterRows(); renderPoster();
+        };
+      });
+    });
+
+    card.querySelectorAll('.add-layout-block').forEach(btn=>{
+      btn.onclick=()=>{
+        const units=Number(btn.dataset.units);
+        if(rowUsedUnits(row)+units>4) return;
+        pushHistory(); row.blocks.push(createBlock(units)); savePosterRows(); renderAll();
+      };
+    });
+  });
+}
+function addPresetRow(unitsList){
+  ensurePosterRows();
+  if(settings.posterRows.length>=5){ alert('A plakáton legfeljebb 5 sort engedünk, hogy ne zsúfolódjon össze.'); return; }
+  pushHistory();
+  settings.posterRows.push(createRow(unitsList));
+  savePosterRows();
+  renderAll();
+}
+function autoAssignLayoutProducts(){
+  ensurePosterRows();
+  const pool=getLayoutProductPool();
+  let cursor=0;
+  pushHistory();
+  settings.posterRows.forEach(row=>row.blocks.forEach(block=>{
+    block.productIds=Array.from({length:block.units},()=>pool[cursor++]?.id ?? null);
+  }));
+  savePosterRows();
+  renderAll();
+}
+function layoutHasAnyAssignment(){
+  ensurePosterRows();
+  return settings.posterRows.some(row=>row.blocks.some(block=>(block.productIds||[]).some(Boolean)));
+}
+function ensureInitialLayoutAssignments(){
+  if(products.length && !layoutHasAnyAssignment()){
+    const pool=getLayoutProductPool();
+    let cursor=0;
+    settings.posterRows.forEach(row=>row.blocks.forEach(block=>{
+      block.productIds=Array.from({length:block.units},()=>pool[cursor++]?.id ?? null);
+    }));
+    savePosterRows();
+  }
+}
+function blockProducts(block){
+  return Array.from({length:block.units},(_,i)=>products.find(p=>p.id===Number(block.productIds?.[i])) || null);
+}
+function automaticBlockPrice(block){
+  const values=blockProducts(block).filter(Boolean).map(p=>p.price).filter(Boolean);
+  return [...new Set(values)].join(' / ') || '—';
+}
+function automaticBlockTitle(block){
+  const values=blockProducts(block).filter(Boolean).map(p=>p.category||p.name).filter(Boolean);
+  const unique=[...new Set(values)];
+  return unique.join(' + ') || 'ÜRES BLOKK';
+}
+function renderV7Block(block,rowUsed,align){
+  const items=blockProducts(block);
+  const title=(block.title||'').trim() || automaticBlockTitle(block);
+  const price=(block.priceLabel||'').trim() || automaticBlockPrice(block);
+  const widthStyle=align==='spread' ? `width:${block.units/4*100}%` : `flex:${block.units} 1 0`;
+  return `<div class="v7-block" style="${widthStyle}">
+    <div class="v7-block-head">
+      <div class="v7-block-price">${esc(price)}</div>
+      <div class="v7-block-title">${esc(title)}</div>
+    </div>
+    <div class="v7-block-media slots-${block.units}">
+      ${items.map((p,idx)=>p
+        ? `<div class="v7-media-cell media-frame ${mediaModeClass(p,'generic')}" data-product-id="${p.id}" data-slot-kind="generic">
+             <img src="${p.image}" alt="">
+           </div>`
+        : `<div class="v7-media-cell v7-empty">${idx+1}. kép helye</div>`
+      ).join('')}
+    </div>
+  </div>`;
+}
+function renderDynamicPosterRows(){
+  ensurePosterRows();
+  if(!settings.posterRows.length) return `<div class="dynamic-rows"><div class="dynamic-row-empty">Adj hozzá legalább egy sort a sorszerkesztőben.</div></div>`;
+  return `<div class="dynamic-rows">
+    ${settings.posterRows.map(row=>{
+      const used=Math.max(1,rowUsedUnits(row));
+      const widthPct=row.align==='spread' ? 100 : Math.min(100,(used/4)*100);
+      return `<div class="dynamic-poster-row align-${row.align}">
+        <div class="dynamic-row-inner" style="width:${widthPct}%">
+          ${(row.blocks||[]).length ? row.blocks.map(block=>renderV7Block(block,used,row.align)).join('') : '<div class="dynamic-row-empty">Üres sor</div>'}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
 function posterBackgroundStyle(){
   const bg = (settings.backgroundMode==='custom' && assets.background) ? assets.background : BUILTIN_POSTER_BG;
   return `background-image:url('${bg}');background-size:cover;background-position:center;background-repeat:no-repeat;`;
@@ -501,13 +800,10 @@ function renderPoster(){
   settings.posterTitle=$('#posterTitle').value;
   settings.posterSubtitle=$('#posterSubtitle').value;
   settings.backgroundMode=$('#backgroundMode').value;
+  ensurePosterRows();
+  ensureInitialLayoutAssignments();
 
-  const items=selectedProducts();
   const host=$('#posterCanvas');
-  const topA=combinedSlotMarkup([items[0],items[1]],'small','top','KIS SZÍV ALAKÚ SÍRDÍSZEK', `${items[0]?.price || '600 Ft'} / ${items[1]?.price || '800 Ft'}`);
-  const topB=combinedSlotMarkup([items[2],items[3]],'small','top','SZÍV ALAKÚ SÍRDÍSZEK', `${items[2]?.price || '1 600 Ft'} / ${items[3]?.price || '1 800 Ft'}`);
-  const midA=combinedSlotMarkup([items[4],items[5]],'big','mid','GALAMBOS ÉS VIRÁGOS SZÍV ALAKÚ SÍRDÍSZEK', items[4]?.price || '2 300 Ft');
-  const midB=combinedSlotMarkup([items[6],items[7]],'big','mid','ANGYALKÁS SÍRDÍSZEK', items[6]?.price || '2 500 Ft');
   host.innerHTML=`<section class="poster" style="${posterBackgroundStyle()}">
     <header class="poster-head">
       ${logoSlotMarkup()}
@@ -518,13 +814,9 @@ function renderPoster(){
       </div>
       <div aria-hidden="true"></div>
     </header>
-    <div class="grid top-grid">${topA}${topB}</div>
-    <div class="grid mid-grid">${midA}${midB}</div>
-    <div class="grid bottom-grid">
-      ${singleSlotMarkup(items[8],'bottom','bottom')}
-      ${singleSlotMarkup(items[9],'bottom','bottom')}
-      ${singleSlotMarkup(items[10],'bottom','bottom')}
-    </div>
+
+    ${renderDynamicPosterRows()}
+
     <footer class="poster-footer">
       <strong class="poster-editable" data-setting-key="brandName">${esc(settings.brandName)}</strong>
       <div class="contacts">Facebook: ${esc(settings.facebook)} &nbsp; • &nbsp; Instagram: ${esc(settings.instagram)} &nbsp; • &nbsp; ${esc(settings.orderText)}</div>
@@ -751,6 +1043,11 @@ function renderProducts(){
       pushHistory();
       if(!confirm(`Törlöd ezt a terméket?\n${p.name}`)) return;
       await dbDelete(PRODUCT_STORE,p.id);
+      ensurePosterRows();
+      settings.posterRows.forEach(row=>row.blocks.forEach(block=>{
+        block.productIds=block.productIds.map(id=>Number(id)===p.id?null:id);
+      }));
+      savePosterRows();
       if(selectedId===p.id) selectedId=null;
       await refresh();
     };
@@ -800,6 +1097,23 @@ function updateEditLabels(){
   $('#editPreview img').style.transform=mediaTransform(tmp);
 }
 ['editMode','editScale','editX','editY'].forEach(id=>$('#'+id).addEventListener('input',updateEditLabels));
+$('#editRecropBtn').onclick=()=>{
+  const p=products.find(x=>x.id===Number($('#editId').value));
+  if(!p) return;
+  $('#editModal').classList.add('hidden');
+  openCropModal({
+    mode:'replace-product',
+    productId:p.id,
+    image:p.image,
+    imageWidth:p.imageWidth||1000,
+    imageHeight:p.imageHeight||1000,
+    targetKind:'generic',
+    frameMode:p.frameMode,
+    scale:p.scale,
+    offsetX:p.offsetX,
+    offsetY:p.offsetY
+  });
+};
 $('#closeModalBtn').onclick=()=>$('#editModal').classList.add('hidden');
 $('#editModal').onclick=e=>{ if(e.target.id==='editModal') $('#editModal').classList.add('hidden'); };
 $('#editImage').onchange=async e=>{
@@ -949,7 +1263,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"6.3",settings,assets,products};
+  const payload={version:"7.0",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -965,9 +1279,7 @@ $('#restoreInput').onchange=async e=>{
     await dbClear(PRODUCT_STORE);
     await dbClear(ASSET_STORE);
     for(const product of (data.products||[])){
-      const copy={...product};
-      delete copy.id;
-      await dbAdd(PRODUCT_STORE,copy);
+      await dbPut(PRODUCT_STORE,{...product});
     }
     if(data.assets?.logo) await dbPut(ASSET_STORE,{key:'logo',value:data.assets.logo});
     if(data.assets?.background) await dbPut(ASSET_STORE,{key:'background',value:data.assets.background});
@@ -1084,6 +1396,15 @@ $('#applyLogoLayoutBtn').onclick=()=>{
   renderPoster();
 };
 
+
+$$('.layout-preset').forEach(btn=>{
+  btn.onclick=()=>{
+    const units=btn.dataset.preset.split(',').filter(Boolean).map(Number);
+    addPresetRow(units);
+  };
+});
+$('#autoAssignLayoutBtn').onclick=autoAssignLayoutProducts;
+
 $('#exportPosterBtn').onclick=async()=>{
   const btn=$('#exportPosterBtn');
   btn.disabled=true; btn.textContent='Készül…';
@@ -1159,6 +1480,7 @@ $('#demoBtn').onclick=async()=>{
     }));
   }
   await refresh();
+  if($('#demoBtn')) autoAssignLayoutProducts();
 };
 
 function fitPreviews(){
