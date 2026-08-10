@@ -2156,3 +2156,502 @@ input[type="color"]{height:42px;padding:4px}
     width:100%;
   }
 }
+
+
+/* ==========================================================
+   V8.3.1 – logó stabilizálás
+   A V8.3-ban a logó layoutja regresszált. Itt keményen rögzítjük,
+   hogy a logó belső tartalma mindig középen maradjon.
+   ========================================================== */
+
+.logo-disc,
+.catalog-logo-disc{
+  display:grid !important;
+  place-items:center !important;
+  overflow:hidden !important;
+  isolation:isolate;
+}
+
+.logo-disc .logo-inner,
+.catalog-logo-disc .logo-inner,
+.logo-disc .logo-fallback,
+.catalog-logo-disc .logo-fallback{
+  position:absolute !important;
+  left:50% !important;
+  top:50% !important;
+  transform:translate(-50%, -50%) !important;
+  transform-origin:center center !important;
+  margin:0 !important;
+}
+
+.logo-disc .logo-inner,
+.catalog-logo-disc .logo-inner{
+  width:76% !important;
+  height:76% !important;
+  max-width:76% !important;
+  max-height:76% !important;
+  object-fit:contain !important;
+}
+
+.logo-disc .logo-fallback{
+  width:76% !important;
+  height:76% !important;
+  padding:0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:3px !important;
+}
+
+.catalog-logo-disc .logo-fallback{
+  width:78% !important;
+  height:78% !important;
+  padding:0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:1px !important;
+}
+
+.logo-disc .pm{font-size:46px !important;line-height:.88 !important;margin:0 !important;}
+.logo-disc .brand{font-size:12px !important;letter-spacing:.16em !important;line-height:1 !important;margin:0 !important;}
+.logo-disc .small{font-size:9px !important;letter-spacing:.12em !important;line-height:1 !important;margin:0 !important;}
+
+.catalog-logo-disc .pm{font-size:19px !important;line-height:.9 !important;margin:0 !important;}
+.catalog-logo-disc .brand{font-size:6.5px !important;letter-spacing:.12em !important;line-height:1 !important;margin:0 !important;}
+.catalog-logo-disc .small{font-size:5.5px !important;letter-spacing:.09em !important;line-height:1 !important;margin:0 !important;}
+
+/* Exportnál is stabilan maradjon a logó. */
+.export-snapshot .logo-disc .logo-inner,
+.export-snapshot .catalog-logo-disc .logo-inner,
+.export-snapshot .logo-disc .logo-fallback,
+.export-snapshot .catalog-logo-disc .logo-fallback{
+  transform:translate(-50%, -50%) !important;
+}
+
+
+/* ==========================================================
+   V8.4 – stabil logó + export háttér pontosítása
+   ========================================================== */
+
+/*
+  LOGÓ
+  A külső kör mozog/méreteződik; a belső tartalom mindig fixen
+  a kör geometriai közepéhez van kötve. A külső inline transformot
+  exportnál sem írjuk felül.
+*/
+.logo-disc{
+  position:relative !important;
+  display:grid !important;
+  place-items:center !important;
+  overflow:hidden !important;
+  isolation:isolate;
+  transform-origin:center center !important;
+}
+
+.logo-disc .logo-inner,
+.logo-disc .logo-fallback{
+  position:absolute !important;
+  left:50% !important;
+  top:50% !important;
+  transform:translate(-50%,-50%) !important;
+  transform-origin:center center !important;
+  margin:0 !important;
+}
+
+.logo-disc .logo-inner{
+  width:76% !important;
+  height:76% !important;
+  max-width:76% !important;
+  max-height:76% !important;
+  object-fit:contain !important;
+}
+
+.logo-disc .logo-fallback{
+  width:76% !important;
+  height:76% !important;
+  padding:0 !important;
+  box-sizing:border-box !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:3px !important;
+  line-height:1 !important;
+}
+
+.logo-disc .pm{
+  margin:0 !important;
+  font-size:46px !important;
+  line-height:.88 !important;
+}
+.logo-disc .brand{
+  margin:0 !important;
+  font-size:12px !important;
+  line-height:1 !important;
+  letter-spacing:.16em !important;
+}
+.logo-disc .small{
+  margin:0 !important;
+  font-size:9px !important;
+  line-height:1 !important;
+  letter-spacing:.12em !important;
+}
+
+/* Katalógus-logó külön stabil méretezéssel. */
+.catalog-logo-disc{
+  position:relative !important;
+  display:grid !important;
+  place-items:center !important;
+  overflow:hidden !important;
+  isolation:isolate;
+}
+.catalog-logo-disc .logo-inner,
+.catalog-logo-disc .logo-fallback{
+  position:absolute !important;
+  left:50% !important;
+  top:50% !important;
+  transform:translate(-50%,-50%) !important;
+  transform-origin:center center !important;
+  margin:0 !important;
+}
+.catalog-logo-disc .logo-inner{
+  width:76% !important;
+  height:76% !important;
+  max-width:76% !important;
+  max-height:76% !important;
+  object-fit:contain !important;
+}
+.catalog-logo-disc .logo-fallback{
+  width:78% !important;
+  height:78% !important;
+  padding:0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:1px !important;
+}
+.catalog-logo-disc .pm{font-size:19px !important;line-height:.9 !important;margin:0 !important;}
+.catalog-logo-disc .brand{font-size:6.5px !important;line-height:1 !important;letter-spacing:.12em !important;margin:0 !important;}
+.catalog-logo-disc .small{font-size:5.5px !important;line-height:1 !important;letter-spacing:.09em !important;margin:0 !important;}
+
+/*
+  EXPORT HÁTTÉR
+  A háttér külön IMG-ként kerül az export klónba, így ugyanazok
+  a pixelek látszanak, mint a szerkesztőben kiválasztott háttérképen.
+*/
+.poster.export-snapshot{
+  box-shadow:none !important;
+}
+
+.poster.export-snapshot > .poster-export-bg{
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  max-width:none !important;
+  max-height:none !important;
+  object-fit:cover !important;
+  object-position:center center !important;
+  z-index:0 !important;
+  pointer-events:none !important;
+  user-select:none !important;
+}
+
+/* A régi CSS-es keretek maradnak, de az inset shadow nem moshatja ki a hátteret. */
+.poster.export-snapshot::before{
+  background:transparent !important;
+  box-shadow:none !important;
+}
+.poster.export-snapshot::after{
+  background:transparent !important;
+  box-shadow:none !important;
+}
+
+/* Az export alatt a tartalom biztosan a háttérkép fölött marad. */
+.poster.export-snapshot > .poster-head,
+.poster.export-snapshot > .dynamic-rows,
+.poster.export-snapshot > .poster-footer{
+  position:relative;
+}
+.poster.export-snapshot > .poster-head{z-index:2 !important;}
+.poster.export-snapshot > .dynamic-rows{z-index:3 !important; position:absolute !important;}
+.poster.export-snapshot > .poster-footer{z-index:2 !important;}
+
+/* Fontos: a logó felhasználói pozícióját és méretét exportnál is megtartjuk. */
+.poster.export-snapshot .logo-disc{
+  transform-origin:center center !important;
+}
+
+
+/* ==========================================================
+   V8.5 – vizuális termékválasztó, drag & drop, export preview
+   ========================================================== */
+
+.poster-toolbar{
+  max-width:calc(100% - 28px);
+  flex-wrap:wrap;
+  justify-content:center;
+}
+.poster-toolbar .tool-btn:disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
+.poster-toolbar .danger-tool{
+  color:#7f2b2b;
+  border-color:#e0bcbc;
+}
+
+.slot-drag-handle{
+  position:absolute;
+  left:7px;
+  bottom:7px;
+  z-index:8;
+  width:31px;
+  height:27px;
+  border:1px solid rgba(255,255,255,.85);
+  border-radius:999px;
+  background:rgba(55,43,36,.78);
+  color:#fff;
+  font-size:15px;
+  font-weight:900;
+  line-height:1;
+  cursor:grab;
+  opacity:0;
+  transition:opacity .15s ease, transform .15s ease, background .15s ease;
+  box-shadow:0 2px 8px rgba(0,0,0,.14);
+}
+.v7-media-cell:hover .slot-drag-handle,
+.v7-media-cell.selected .slot-drag-handle{
+  opacity:1;
+}
+.slot-drag-handle:hover{
+  background:var(--accent);
+  transform:scale(1.05);
+}
+.slot-drag-handle:active{
+  cursor:grabbing;
+}
+
+.slot-drag-source{
+  opacity:.58;
+}
+.slot-drop-target{
+  outline:4px solid rgba(116,21,33,.72) !important;
+  outline-offset:-4px !important;
+}
+.slot-drop-target::after{
+  content:'Ide kerül';
+  position:absolute;
+  inset:auto 50% 10px auto;
+  transform:translateX(50%);
+  z-index:12;
+  background:rgba(116,21,33,.94);
+  color:#fff;
+  border-radius:999px;
+  padding:5px 10px;
+  font-size:10px;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+.v7-empty{
+  cursor:pointer;
+}
+.empty-slot-pick{
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  z-index:5;
+  border:1px solid #d8c6ad;
+  border-radius:999px;
+  padding:8px 11px;
+  background:rgba(255,253,248,.94);
+  color:#6d5748;
+  font-size:11px;
+  font-weight:800;
+  cursor:pointer;
+}
+.v7-empty:hover .empty-slot-pick{
+  color:#fff;
+  background:var(--accent);
+  border-color:var(--accent);
+}
+
+.clean-preview .slot-drag-handle,
+.clean-preview .empty-slot-pick,
+.export-snapshot .slot-drag-handle,
+.export-snapshot .empty-slot-pick{
+  display:none !important;
+}
+
+/* Vizuális termékválasztó */
+.product-picker-card{
+  width:min(900px,100%);
+}
+.product-picker-target{
+  margin:3px 0 0;
+}
+.product-picker-search{
+  margin:8px 0 14px;
+}
+.product-picker-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  max-height:62vh;
+  overflow:auto;
+  padding:2px 3px 8px;
+}
+.product-picker-item{
+  position:relative;
+  display:grid;
+  grid-template-columns:92px 1fr;
+  gap:10px;
+  min-width:0;
+  padding:8px;
+  border:1px solid #ded1c1;
+  border-radius:12px;
+  background:#fffdf9;
+  color:#3f342e;
+  text-align:left;
+  cursor:pointer;
+}
+.product-picker-item:hover{
+  border-color:#b89564;
+  box-shadow:0 5px 16px rgba(67,43,27,.09);
+}
+.product-picker-item.current{
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px rgba(116,21,33,.12);
+}
+.product-picker-thumb{
+  width:92px;
+  height:76px;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  border-radius:8px;
+  background:#f5eee4;
+}
+.product-picker-thumb img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+.product-picker-info{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:3px;
+}
+.product-picker-info strong{
+  font-size:13px;
+  line-height:1.15;
+}
+.product-picker-info small{
+  color:#88786d;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.product-picker-info b{
+  color:var(--accent);
+  font-size:13px;
+}
+.picker-current-badge{
+  position:absolute;
+  top:6px;
+  right:6px;
+  border-radius:999px;
+  padding:3px 6px;
+  background:var(--accent);
+  color:#fff;
+  font-size:8px;
+  font-weight:800;
+}
+.product-picker-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:13px;
+}
+.product-picker-empty{
+  grid-column:1/-1;
+}
+
+/* Pontos export előnézet */
+.export-preview-modal{
+  padding:10px;
+}
+.export-preview-card{
+  width:min(980px,100%);
+  max-height:96vh;
+  display:flex;
+  flex-direction:column;
+}
+.export-preview-stage{
+  min-height:260px;
+  max-height:68vh;
+  overflow:auto;
+  display:grid;
+  place-items:center;
+  padding:12px;
+  border:1px solid #ddcfbd;
+  border-radius:12px;
+  background:#d8d4cd;
+}
+.export-preview-stage img{
+  display:block;
+  max-width:100%;
+  max-height:64vh;
+  width:auto;
+  height:auto;
+  box-shadow:0 12px 28px rgba(0,0,0,.18);
+}
+.export-preview-meta{
+  display:flex;
+  justify-content:space-between;
+  align-items:end;
+  gap:14px;
+  padding:10px 2px 0;
+}
+.export-preview-meta>label{
+  width:min(280px,100%);
+  margin:0;
+}
+.export-preview-actions{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  margin-top:12px;
+}
+.catalog-export-actions{
+  display:grid;
+  gap:8px;
+}
+
+/* Ne villanjon fel szerkesztőeszköz export közben */
+.export-host .poster-toolbar,
+.export-host .slot-drag-handle,
+.export-host .empty-slot-pick{
+  display:none !important;
+}
+
+@media(max-width:760px){
+  .product-picker-grid{
+    grid-template-columns:1fr;
+  }
+  .export-preview-meta{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .export-preview-actions{
+    grid-template-columns:1fr;
+  }
+}

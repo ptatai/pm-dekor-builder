@@ -25,7 +25,8 @@ function markSaveError(){
   setAutosaveStatus('⚠ Mentési hiba','error');
 }
 const DB_NAME='pm-dekor-v63', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v63';
-let products=[], pendingImage='', pendingImageMeta=null, selectedId=null, dragState=null, undoStack=[], redoStack=[], previewMode=false, cropState=null, logoSelected=false, logoDragState=null;
+let products=[], pendingImage='', pendingImageMeta=null, selectedId=null, selectedSlot=null, dragState=null, undoStack=[], redoStack=[], previewMode=false, cropState=null, logoSelected=false, logoDragState=null;
+let productPickerTarget=null, posterSlotDrag=null, exportPreviewCanvas=null, logoListenerAbort=null;
 
 const defaults={
   brandName:'PM Dekor Melinda',
@@ -42,7 +43,8 @@ const defaults={
   logoScale:100,
   logoOffsetX:0,
   logoOffsetY:0,
-  hideEmptyOnExport:true
+  hideEmptyOnExport:true,
+  jpgQuality:92
 };
 
 const DEFAULT_POSTER_ROWS=[
@@ -457,6 +459,7 @@ async function applySnapshot(snapshot){
   settings={...defaults,...(snapshot.settings||{})};
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
   selectedId=null;
+  selectedSlot=null;
   loadSettingsUi();
   await refresh();
 }
@@ -549,15 +552,23 @@ function renderPosterUi(){
     return;
   }
   toolbar.classList.remove('hidden');
+  const modeLabel=p.frameMode==='auto' ? 'AUTO' : (p.frameMode==='cover' ? 'Kitöltés' : 'Teljes kép');
   toolbar.innerHTML=`
     <span class="toolbar-title">${esc(p.name)}</span>
+    <button class="tool-btn" type="button" data-act="pickproduct" ${selectedSlot?'':'disabled'}>Másik termék</button>
+    <button class="tool-btn" type="button" data-act="recrop">Újravágás</button>
+    <button class="tool-btn" type="button" data-act="togglemode">Mód: ${modeLabel}</button>
     <button class="tool-btn" type="button" data-act="zoomout">− Zoom</button>
     <button class="tool-btn" type="button" data-act="zoomin">+ Zoom</button>
-    <button class="tool-btn" type="button" data-act="togglemode">${p.frameMode==='auto' ? 'AUTO' : (p.frameMode==='cover' ? 'Teljes kép' : 'Kitöltés')}</button>
-    <button class="tool-btn" type="button" data-act="recrop">Újravágás</button>
-    <button class="tool-btn" type="button" data-act="replace">Csere</button>
-    <button class="tool-btn" type="button" data-act="reset">Reset</button>
+    <button class="tool-btn" type="button" data-act="replace">Képfájl csere</button>
+    <button class="tool-btn danger-tool" type="button" data-act="clear-slot" ${selectedSlot?'':'disabled'}>Hely ürítése</button>
   `;
+  toolbar.querySelector('[data-act="pickproduct"]').onclick=()=>{
+    if(selectedSlot) openProductPicker(selectedSlot.blockId,selectedSlot.slotIndex);
+  };
+  toolbar.querySelector('[data-act="clear-slot"]').onclick=()=>{
+    if(selectedSlot) setPosterSlotProduct(selectedSlot.blockId,selectedSlot.slotIndex,null,{statusText:'Képhely kiürítve'});
+  };
   toolbar.querySelector('[data-act="zoomout"]').onclick=async()=>{ pushHistory(); p.scale=Math.max(50,(p.scale||100)-10); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
   toolbar.querySelector('[data-act="zoomin"]').onclick=async()=>{ pushHistory(); p.scale=Math.min(220,(p.scale||100)+10); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
   toolbar.querySelector('[data-act="togglemode"]').onclick=async()=>{ pushHistory(); p.frameMode=p.frameMode==='auto' ? 'cover' : (p.frameMode==='cover' ? 'contain' : 'auto'); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
@@ -576,7 +587,6 @@ function renderPosterUi(){
     });
   };
   toolbar.querySelector('[data-act="replace"]').onclick=()=>{ const inp=$('#replaceImageInput'); if(inp){ inp.value=''; inp.click(); } };
-  toolbar.querySelector('[data-act="reset"]').onclick=async()=>{ pushHistory(); p.frameMode='auto'; p.scale=100; p.offsetX=0; p.offsetY=0; await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
   updateHistoryButtons();
 }
 
@@ -737,6 +747,112 @@ function savePosterRows(){
   markSaving();
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
   markAutoSaved();
+}
+
+
+function findPosterBlock(blockId){
+  ensurePosterRows();
+  for(const row of settings.posterRows){
+    const block=(row.blocks||[]).find(b=>b.id===blockId);
+    if(block) return {row,block};
+  }
+  return null;
+}
+
+function getPosterSlot(blockId,slotIndex){
+  const found=findPosterBlock(blockId);
+  if(!found) return null;
+  const index=Math.max(0,Number(slotIndex)||0);
+  return {row:found.row,block:found.block,index,productId:found.block.productIds?.[index] ? Number(found.block.productIds[index]) : null};
+}
+
+async function setPosterSlotProduct(blockId,slotIndex,productId,{closePicker=true,statusText='Termék frissítve'}={}){
+  const slot=getPosterSlot(blockId,slotIndex);
+  if(!slot) return;
+  pushHistory();
+  while(slot.block.productIds.length<=slot.index) slot.block.productIds.push(null);
+  slot.block.productIds[slot.index]=productId ? Number(productId) : null;
+  selectedSlot={blockId,slotIndex:slot.index};
+  selectedId=productId ? Number(productId) : null;
+  logoSelected=false;
+  savePosterRows();
+  if(closePicker) closeProductPicker();
+  renderAll();
+  updatePosterLiveStatus(statusText);
+}
+
+async function swapPosterSlots(source,target){
+  if(!source || !target) return;
+  if(source.blockId===target.blockId && Number(source.slotIndex)===Number(target.slotIndex)) return;
+
+  const a=getPosterSlot(source.blockId,source.slotIndex);
+  const b=getPosterSlot(target.blockId,target.slotIndex);
+  if(!a || !b) return;
+
+  pushHistory();
+  while(a.block.productIds.length<=a.index) a.block.productIds.push(null);
+  while(b.block.productIds.length<=b.index) b.block.productIds.push(null);
+
+  const tmp=a.block.productIds[a.index] || null;
+  a.block.productIds[a.index]=b.block.productIds[b.index] || null;
+  b.block.productIds[b.index]=tmp;
+
+  selectedSlot={blockId:target.blockId,slotIndex:Number(target.slotIndex)};
+  selectedId=tmp ? Number(tmp) : null;
+  savePosterRows();
+  renderAll();
+  updatePosterLiveStatus('Képhelyek felcserélve');
+}
+
+function openProductPicker(blockId,slotIndex){
+  const slot=getPosterSlot(blockId,slotIndex);
+  if(!slot) return;
+  productPickerTarget={blockId,slotIndex:Number(slotIndex)};
+  const current=slot.productId ? products.find(p=>Number(p.id)===Number(slot.productId)) : null;
+  $('#productPickerTargetText').textContent=current
+    ? `Jelenleg: ${current.name}`
+    : 'Üres képhely – válassz terméket.';
+  $('#productPickerSearch').value='';
+  renderProductPicker();
+  $('#productPickerModal').classList.remove('hidden');
+  setTimeout(()=>$('#productPickerSearch')?.focus(),40);
+}
+
+function closeProductPicker(){
+  $('#productPickerModal')?.classList.add('hidden');
+  productPickerTarget=null;
+}
+
+function renderProductPicker(){
+  const grid=$('#productPickerGrid');
+  if(!grid) return;
+  const q=($('#productPickerSearch')?.value||'').trim().toLowerCase();
+  const current=productPickerTarget ? getPosterSlot(productPickerTarget.blockId,productPickerTarget.slotIndex)?.productId : null;
+  const shown=products.filter(p=>{
+    if(!q) return true;
+    return `${p.name||''} ${p.category||''} ${p.posterLabel||''} ${p.price||''}`.toLowerCase().includes(q);
+  });
+
+  grid.innerHTML=shown.length ? shown.map(p=>`
+    <button class="product-picker-item ${Number(current)===Number(p.id)?'current':''}" type="button" data-picker-product="${p.id}">
+      <span class="product-picker-thumb"><img src="${p.image}" alt=""></span>
+      <span class="product-picker-info">
+        <strong>${esc(p.name)}</strong>
+        <small>${esc(p.category||'PM Dekor')}</small>
+        <b>${esc(p.price||'')}</b>
+      </span>
+      ${Number(current)===Number(p.id)?'<span class="picker-current-badge">Jelenlegi</span>':''}
+    </button>
+  `).join('') : '<div class="empty product-picker-empty">Nincs találat.</div>';
+
+  grid.querySelectorAll('[data-picker-product]').forEach(btn=>{
+    btn.onclick=()=>setPosterSlotProduct(
+      productPickerTarget.blockId,
+      productPickerTarget.slotIndex,
+      Number(btn.dataset.pickerProduct),
+      {statusText:'Termék kiválasztva'}
+    );
+  });
 }
 
 function pruneLayoutProductIds(){
@@ -994,6 +1110,7 @@ function renderV7Block(block,rowUsed,align){
   const widthStyle=align==='spread' ? `width:${block.units/4*100}%` : `flex:${block.units} 1 0`;
 
   const cellMarkup = items.map((p,idx)=>{
+    const slotAttrs=`data-block-id="${esc(block.id)}" data-slot-index="${idx}"`;
     const mini = p ? `
       <div class="v7-mini-head">
         <div class="v7-mini-price">${esc(productShortPrice(p))}</div>
@@ -1001,16 +1118,18 @@ function renderV7Block(block,rowUsed,align){
       </div>` : `<div class="v7-mini-head empty"><div class="v7-mini-price">—</div><div class="v7-mini-title">${idx+1}. kép helye</div></div>`;
 
     return p
-      ? `<div class="v7-media-cell media-frame ${mediaModeClass(p,slotKind)}" data-product-id="${p.id}" data-slot-kind="${slotKind}">
+      ? `<div class="v7-media-cell media-frame ${mediaModeClass(p,slotKind)}" data-product-id="${p.id}" data-slot-kind="${slotKind}" ${slotAttrs}>
            ${variant==='classic' ? mini : ''}
            <img src="${p.image}" alt="">
+           <button class="slot-drag-handle" type="button" draggable="true" title="Húzd másik képhelyre a cseréhez" aria-label="Képhely mozgatása">↔</button>
          </div>`
-      : `<div class="v7-media-cell v7-empty">
+      : `<div class="v7-media-cell v7-empty" ${slotAttrs}>
            ${variant==='classic' ? mini : `<span>${idx+1}. kép helye</span>`}
+           <button class="empty-slot-pick" type="button">+ Termék választása</button>
          </div>`;
   }).join('');
 
-  return `<div class="v7-block v7-variant-${variant}" data-units="${block.units}" style="${widthStyle}">
+  return `<div class="v7-block v7-variant-${variant}" data-units="${block.units}" data-block-id="${esc(block.id)}" style="${widthStyle}">
     <div class="v7-block-head">
       <div class="v7-block-price">${esc(price)}</div>
       <div class="v7-block-title">${esc(title)}</div>
@@ -1067,14 +1186,23 @@ function saveLogoLayout(){
   markAutoSaved();
 }
 function bindInteractiveLogo(){
+  if(logoListenerAbort){
+    logoListenerAbort.abort();
+    logoListenerAbort=null;
+  }
+
   const host=$('#posterCanvas');
   const logo=host?.querySelector('[data-logo-interactive]');
   if(!logo) return;
+
+  logoListenerAbort=new AbortController();
+  const logoSignal=logoListenerAbort.signal;
 
   logo.onclick=e=>{
     if(e.target.closest('.logo-resize-handle')) return;
     logoSelected=true;
     selectedId=null;
+    selectedSlot=null;
     logo.classList.add('logo-selected');
     updateSelectedControls();
     renderPosterUi();
@@ -1094,6 +1222,7 @@ function bindInteractiveLogo(){
     if(e.button!==undefined && e.button!==0) return;
     logoSelected=true;
     selectedId=null;
+    selectedSlot=null;
     pushHistory();
     logoDragState={
       mode:'move',
@@ -1150,8 +1279,8 @@ function bindInteractiveLogo(){
     renderPoster();
   };
 
-  window.addEventListener('pointermove',move,{signal:logo._abort?.signal});
-  window.addEventListener('pointerup',up,{signal:logo._abort?.signal});
+  window.addEventListener('pointermove',move,{signal:logoSignal});
+  window.addEventListener('pointerup',up,{signal:logoSignal});
 }
 
 function renderPoster(){
@@ -1203,27 +1332,129 @@ function applyMediaTransforms(scope=document){
   });
 }
 function attachPosterDrag(scope){
-  scope.querySelectorAll('.media-frame[data-product-id]').forEach(frame=>{
-    frame.onclick=()=>{
+  const getTargetFromEl=el=>({
+    blockId:el.dataset.blockId,
+    slotIndex:Number(el.dataset.slotIndex)
+  });
+
+  // A ↔ fogópont mozgatja/cseréli a plakátterméket. Maga a kép továbbra is cropolható húzással.
+  scope.querySelectorAll('.slot-drag-handle').forEach(handle=>{
+    handle.onclick=e=>e.stopPropagation();
+    handle.onpointerdown=e=>e.stopPropagation();
+    handle.ondragstart=e=>{
+      const cell=handle.closest('[data-block-id][data-slot-index]');
+      if(!cell) return;
+      posterSlotDrag=getTargetFromEl(cell);
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain',JSON.stringify(posterSlotDrag));
+      setTimeout(()=>cell.classList.add('slot-drag-source'),0);
+    };
+    handle.ondragend=()=>{
+      posterSlotDrag=null;
+      scope.querySelectorAll('.slot-drag-source,.slot-drop-target').forEach(el=>el.classList.remove('slot-drag-source','slot-drop-target'));
+    };
+  });
+
+  // Minden képhely célpont lehet – az üres is.
+  scope.querySelectorAll('[data-block-id][data-slot-index]').forEach(slotEl=>{
+    slotEl.ondragover=e=>{
+      if(posterSlotDrag){
+        e.preventDefault();
+        e.dataTransfer.dropEffect='move';
+        slotEl.classList.add('slot-drop-target');
+        return;
+      }
+      if(e.dataTransfer?.files?.length && slotEl.dataset.productId){
+        e.preventDefault();
+        slotEl.classList.add('drop-target');
+      }
+    };
+    slotEl.ondragleave=()=>{
+      slotEl.classList.remove('slot-drop-target','drop-target');
+    };
+    slotEl.ondrop=async e=>{
+      slotEl.classList.remove('slot-drop-target','drop-target');
+
+      if(posterSlotDrag){
+        e.preventDefault();
+        const source={...posterSlotDrag};
+        posterSlotDrag=null;
+        await swapPosterSlots(source,getTargetFromEl(slotEl));
+        return;
+      }
+
+      // Külső képfájl ráhúzása: a meglévő termék fotóját cseréli.
+      if(e.dataTransfer?.files?.length && slotEl.dataset.productId){
+        e.preventDefault();
+        const file=[...(e.dataTransfer.files||[])].find(f=>f.type.startsWith('image/'));
+        if(!file) return;
+        const id=Number(slotEl.dataset.productId);
+        const p=products.find(x=>x.id===id);
+        if(!p) return;
+        const image=await fileToData(file);
+        const meta=await getImageMetaFromData(image);
+        const smart=getSmartDefaults(meta.width,meta.height,slotEl.dataset.slotKind || getProductSlotKind(id));
+        pushHistory();
+        p.image=image;
+        p.imageWidth=meta.width;
+        p.imageHeight=meta.height;
+        p.frameMode='auto';
+        p.scale=smart.scale;
+        p.offsetX=0;
+        p.offsetY=0;
+        selectedId=id;
+        selectedSlot=getTargetFromEl(slotEl);
+        await dbPut(PRODUCT_STORE,p);
+        renderAll();
+      }
+    };
+  });
+
+  // Üres hely: egy kattintásra vizuális termékválasztó.
+  scope.querySelectorAll('.v7-empty[data-block-id][data-slot-index]').forEach(empty=>{
+    empty.onclick=e=>{
+      if(e.target.closest('.slot-drag-handle')) return;
+      const target=getTargetFromEl(empty);
+      openProductPicker(target.blockId,target.slotIndex);
+      e.stopPropagation();
+    };
+  });
+
+  scope.querySelectorAll('.media-frame[data-product-id][data-block-id][data-slot-index]').forEach(frame=>{
+    frame.onclick=e=>{
+      if(e.target.closest('.slot-drag-handle')) return;
       logoSelected=false;
       selectedId=Number(frame.dataset.productId);
+      selectedSlot=getTargetFromEl(frame);
       updateSelectedControls();
       applyMediaTransforms(scope);
       renderPosterUi();
     };
+
+    frame.ondblclick=e=>{
+      if(e.target.closest('.slot-drag-handle')) return;
+      const target=getTargetFromEl(frame);
+      openProductPicker(target.blockId,target.slotIndex);
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
     frame.onpointerdown=e=>{
+      if(e.target.closest('.slot-drag-handle')) return;
       if(e.button!==undefined && e.button!==0) return;
       const id=Number(frame.dataset.productId);
       const p=products.find(x=>x.id===id);
       if(!p) return;
       logoSelected=false;
       selectedId=id;
+      selectedSlot=getTargetFromEl(frame);
       updateSelectedControls();
       applyMediaTransforms(scope);
       dragState={id,startX:e.clientX,startY:e.clientY,offsetX:p.offsetX||0,offsetY:p.offsetY||0,changed:false};
       frame.setPointerCapture?.(e.pointerId);
       e.preventDefault();
     };
+
     frame.onpointermove=e=>{
       if(!dragState || dragState.id!==Number(frame.dataset.productId)) return;
       const p=products.find(x=>x.id===dragState.id);
@@ -1235,6 +1466,7 @@ function attachPosterDrag(scope){
       syncSelectedControlValues(p);
       renderPosterUi();
     };
+
     frame.onpointerup=async()=>{
       if(!dragState) return;
       const p=products.find(x=>x.id===dragState.id);
@@ -1245,36 +1477,6 @@ function attachPosterDrag(scope){
         renderProducts();
         renderCatalog();
       }
-    };
-    frame.ondragover=e=>{
-      if(e.dataTransfer?.files?.length){
-        e.preventDefault();
-        frame.classList.add('drop-target');
-      }
-    };
-    frame.ondragleave=()=>frame.classList.remove('drop-target');
-    frame.ondrop=async e=>{
-      e.preventDefault();
-      frame.classList.remove('drop-target');
-      const file=[...(e.dataTransfer?.files||[])].find(f=>f.type.startsWith('image/'));
-      if(!file) return;
-      const id=Number(frame.dataset.productId);
-      const p=products.find(x=>x.id===id);
-      if(!p) return;
-      const image=await fileToData(file);
-      const meta=await getImageMetaFromData(image);
-      const smart=getSmartDefaults(meta.width,meta.height,frame.dataset.slotKind || getProductSlotKind(id));
-      pushHistory();
-      p.image=image;
-      p.imageWidth=meta.width;
-      p.imageHeight=meta.height;
-      p.frameMode='auto';
-      p.scale=smart.scale;
-      p.offsetX=0;
-      p.offsetY=0;
-      selectedId=id;
-      await dbPut(PRODUCT_STORE,p);
-      renderAll();
     };
   });
 }
@@ -1582,6 +1784,8 @@ function loadSettingsUi(){
   });
   if($('#logoVisible')) $('#logoVisible').checked = settings.logoVisible !== false;
   if($('#hideEmptyOnExport')) $('#hideEmptyOnExport').checked = settings.hideEmptyOnExport !== false;
+  if($('#jpgQuality')) $('#jpgQuality').value=Number(settings.jpgQuality ?? 92);
+  syncJpgQualityUi();
   setAccent(settings.accentColor);
   updateAddLabels();
   syncLogoControlLabels();
@@ -1604,6 +1808,7 @@ $('#saveSettingsBtn').onclick=()=>{
   settings.logoOffsetX=Number($('#logoOffsetX').value);
   settings.logoOffsetY=Number($('#logoOffsetY').value);
   if($('#hideEmptyOnExport')) settings.hideEmptyOnExport=$('#hideEmptyOnExport').checked;
+  if($('#jpgQuality')) settings.jpgQuality=Number($('#jpgQuality').value);
   markSaving();
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
   markAutoSaved();
@@ -1655,6 +1860,23 @@ $('#backgroundMode').addEventListener('change',()=>{
   settings.backgroundMode=$('#backgroundMode').value;
   renderAll();
 });
+
+function syncJpgQualityUi(sourceValue=null){
+  const value=Math.max(70,Math.min(100,Number(sourceValue ?? settings.jpgQuality ?? 92)));
+  settings.jpgQuality=value;
+  if($('#jpgQuality')) $('#jpgQuality').value=value;
+  if($('#jpgQualityValue')) $('#jpgQualityValue').textContent=`${value}%`;
+  if($('#jpgQualityPreview')) $('#jpgQualityPreview').value=value;
+  if($('#jpgQualityPreviewValue')) $('#jpgQualityPreviewValue').textContent=`${value}%`;
+}
+
+function saveJpgQuality(value){
+  syncJpgQualityUi(value);
+  markSaving();
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+  markAutoSaved();
+}
+
 function renderAssetPreviews(){
   $('#logoPreview').innerHTML=assets.logo ? `<img src="${assets.logo}" alt="PM Dekor logó">` : 'Nincs saját logó – a szöveges PM logó látszik.';
 }
@@ -1669,6 +1891,32 @@ if($('#hideEmptyOnExport')){
   });
 }
 
+if($('#jpgQuality')){
+  $('#jpgQuality').addEventListener('input',()=>syncJpgQualityUi($('#jpgQuality').value));
+  $('#jpgQuality').addEventListener('change',()=>saveJpgQuality($('#jpgQuality').value));
+}
+if($('#jpgQualityPreview')){
+  $('#jpgQualityPreview').addEventListener('input',()=>syncJpgQualityUi($('#jpgQualityPreview').value));
+  $('#jpgQualityPreview').addEventListener('change',()=>saveJpgQuality($('#jpgQualityPreview').value));
+}
+
+
+
+if($('#productPickerSearch')) $('#productPickerSearch').oninput=renderProductPicker;
+if($('#closeProductPickerBtn')) $('#closeProductPickerBtn').onclick=closeProductPicker;
+if($('#cancelProductPickerBtn')) $('#cancelProductPickerBtn').onclick=closeProductPicker;
+if($('#clearProductPickerSlotBtn')){
+  $('#clearProductPickerSlotBtn').onclick=()=>{
+    if(productPickerTarget){
+      setPosterSlotProduct(productPickerTarget.blockId,productPickerTarget.slotIndex,null,{statusText:'Képhely kiürítve'});
+    }
+  };
+}
+if($('#productPickerModal')){
+  $('#productPickerModal').addEventListener('click',e=>{
+    if(e.target===$('#productPickerModal')) closeProductPicker();
+  });
+}
 
 function openHelp(){
   $('#helpModal')?.classList.remove('hidden');
@@ -1685,11 +1933,14 @@ if($('#helpModal')){
   });
 }
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape' && !$('#helpModal')?.classList.contains('hidden')) closeHelp();
+  if(e.key!=='Escape') return;
+  if(!$('#productPickerModal')?.classList.contains('hidden')) closeProductPicker();
+  if(!$('#exportPreviewModal')?.classList.contains('hidden')) closeExportPreview();
+  if(!$('#helpModal')?.classList.contains('hidden')) closeHelp();
 });
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"8.3",settings,assets,products};
+  const payload={version:"8.5",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1712,6 +1963,7 @@ $('#restoreInput').onchange=async e=>{
     settings={...defaults,...(data.settings||{})};
     localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
     selectedId=null;
+    selectedSlot=null;
     await refresh();
     loadSettingsUi();
     alert('Mentés sikeresen betöltve.');
@@ -1725,6 +1977,7 @@ $('#clearBtn').onclick=async()=>{
   await dbClear(PRODUCT_STORE);
   await dbClear(ASSET_STORE);
   selectedId=null;
+  selectedSlot=null;
   await refresh();
 };
 
@@ -2042,10 +2295,28 @@ async function rasterizePosterImagesForExport(clone,pixelRatio=2){
   }));
 }
 
+function installExactPosterBackgroundForExport(clone){
+  const old=clone.querySelector(':scope > .poster-export-bg');
+  if(old) old.remove();
+
+  const bg=document.createElement('img');
+  bg.className='poster-export-bg';
+  bg.alt='';
+  bg.setAttribute('aria-hidden','true');
+  bg.src=getBackgroundSrc();
+
+  clone.prepend(bg);
+
+  // A háttér most valódi képréteg, ne a html2canvas renderelje újra CSS backgroundként.
+  clone.style.setProperty('background-image','none','important');
+  clone.style.setProperty('background-color','#faf4e8','important');
+}
+
 async function preparePosterExportClone(clone,node,scale=2){
-  clone.querySelectorAll('.poster-toolbar,.logo-resize-handle').forEach(el=>el.remove());
+  clone.querySelectorAll('.poster-toolbar,.logo-resize-handle,.slot-drag-handle,.empty-slot-pick').forEach(el=>el.remove());
   clone.querySelectorAll('.logo-disc').forEach(el=>el.classList.remove('logo-selected'));
 
+  installExactPosterBackgroundForExport(clone);
   compactPosterExportClone(clone);
 
   // A DOM-nak előbb ki kell számolnia a végső export méreteket.
@@ -2056,7 +2327,7 @@ async function preparePosterExportClone(clone,node,scale=2){
   await rasterizePosterImagesForExport(clone,scale);
 }
 
-async function exportElementAsPng(node, fileName, scale=2){
+async function buildPosterExportCanvas(node,scale=2){
   const host=document.createElement('div');
   host.className='export-host';
   host.style.position='fixed';
@@ -2066,7 +2337,6 @@ async function exportElementAsPng(node, fileName, scale=2){
   host.style.opacity='1';
   host.style.zIndex='-1';
 
-  // Először az élő nézet összes képe legyen ténylegesen betöltve.
   await waitForRenderableAssets(node);
 
   const clone=node.cloneNode(true);
@@ -2077,34 +2347,85 @@ async function exportElementAsPng(node, fileName, scale=2){
   try{
     await preparePosterExportClone(clone,node,scale);
     await waitForRenderableAssets(clone);
-
-    const canvas=await html2canvas(clone,{
+    return await html2canvas(clone,{
       scale,
       useCORS:true,
       backgroundColor:'#fffaf0',
       logging:false
     });
-
-    const a=document.createElement('a');
-    a.download=fileName;
-    a.href=canvas.toDataURL('image/png');
-    a.click();
   }finally{
     host.remove();
   }
 }
 
-$('#exportPosterBtn').onclick=async()=>{
+function downloadCanvas(canvas,format='png',fileBase='pm-dekor-plakat'){
+  if(!canvas) return;
+  const normalized=format==='jpg' ? 'jpg' : 'png';
+  const mime=normalized==='jpg' ? 'image/jpeg' : 'image/png';
+  const quality=normalized==='jpg' ? Number(settings.jpgQuality||92)/100 : undefined;
+  const a=document.createElement('a');
+  a.download=`${fileBase}.${normalized}`;
+  a.href=canvas.toDataURL(mime,quality);
+  a.click();
+}
+
+function closeExportPreview(){
+  $('#exportPreviewModal')?.classList.add('hidden');
+}
+
+async function openPosterExportPreview(){
   if(!confirmPosterExport()) return;
   const btn=$('#exportPosterBtn');
-  btn.disabled=true; btn.textContent='Készül…';
+  btn.disabled=true;
+  btn.textContent='Export előnézet készül…';
   try{
     const el=$('#posterCanvas').firstElementChild;
-    await exportElementAsPng(el,'pm-dekor-plakat.png',2);
+    exportPreviewCanvas=await buildPosterExportCanvas(el,2);
+    $('#exportPreviewImage').src=exportPreviewCanvas.toDataURL('image/png');
+    $('#exportPreviewSize').textContent=`${exportPreviewCanvas.width} × ${exportPreviewCanvas.height} px`;
+    syncJpgQualityUi();
+    $('#exportPreviewModal').classList.remove('hidden');
   }finally{
-    btn.disabled=false; btn.textContent='Plakát letöltése PNG-ben';
+    btn.disabled=false;
+    btn.textContent='Export előnézet – PNG / JPG';
   }
-};
+}
+
+$('#exportPosterBtn').onclick=openPosterExportPreview;
+if($('#closeExportPreviewBtn')) $('#closeExportPreviewBtn').onclick=closeExportPreview;
+if($('#backToEditorBtn')) $('#backToEditorBtn').onclick=closeExportPreview;
+if($('#downloadPreviewPngBtn')) $('#downloadPreviewPngBtn').onclick=()=>downloadCanvas(exportPreviewCanvas,'png','pm-dekor-plakat');
+if($('#downloadPreviewJpgBtn')) $('#downloadPreviewJpgBtn').onclick=()=>downloadCanvas(exportPreviewCanvas,'jpg','pm-dekor-plakat');
+if($('#exportPreviewModal')){
+  $('#exportPreviewModal').addEventListener('click',e=>{
+    if(e.target===$('#exportPreviewModal')) closeExportPreview();
+  });
+}
+
+if($('#exportCatalogJpgBtn')){
+  $('#exportCatalogJpgBtn').onclick=async()=>{
+    const btn=$('#exportCatalogJpgBtn');
+    btn.disabled=true;
+    btn.textContent='JPG készül…';
+    try{
+      const pages=$$('.catalog-page');
+      for(let i=0;i<pages.length;i++){
+        await waitForRenderableAssets(pages[i]);
+        const canvas=await html2canvas(pages[i],{
+          scale:1.5,
+          useCORS:true,
+          backgroundColor:'#fffaf0',
+          logging:false
+        });
+        downloadCanvas(canvas,'jpg',pages.length>1 ? `pm-dekor-katalogus-${i+1}` : 'pm-dekor-katalogus');
+      }
+    }finally{
+      btn.disabled=false;
+      btn.textContent='Katalógus JPG-ben';
+    }
+  };
+}
+
 $('#exportCatalogBtn').onclick=async()=>{
   const btn=$('#exportCatalogBtn');
   btn.disabled=true; btn.textContent='PDF készül…';

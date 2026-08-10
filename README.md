@@ -1,37 +1,60 @@
-# PM Dekor szerkesztő v8.3
+# PM Dekor szerkesztő v8.5
 
-## Fő javítás: a kép feltöltése már ismeri a blokk szélességét
+A V8.5 fő célja: a plakát szerkesztése legyen gyorsabb és vizuálisabb,
+az export pedig ellenőrizhető legyen még letöltés előtt.
 
-Korábban a crop ablak még a régi „felső / középső / alsó” logikát használta,
-miközben a plakátban már 1×, 2×, 3× és 4× széles blokkok vannak.
+## 1. Vizuális termékválasztó
+- üres képhelyre kattintva képes termékgaléria nyílik
+- kereshető név, kategória és ár alapján
+- a kijelölt termék egy kattintással bekerül a képhelyre
+- már kitöltött képhelyen dupla kattintással is megnyitható
+- a gyorsmenüben külön „Másik termék” gomb van
 
-V8.3-ban a crop célpontjai:
-- 1× normál blokk
-- 2× dupla blokk
-- 3× széles blokk
-- 4× teljes sor
+## 2. Drag & drop helycsere
+A termékfotó bal alsó sarkában megjelenik egy ↔ fogópont.
+Ezt egy másik képhelyre húzva:
+- két termék helyet cserél, vagy
+- üres képhelyre húzva a termék oda kerül.
 
-## Automatikus felismerés feltöltéskor
-A feltöltött kép képaránya alapján a program előre választ egy valószínű célblokkot:
-- normál
-- dupla
-- széles
-- teljes sor
+A fotó sima húzása továbbra is a crop/pozíció állítására szolgál,
+így a két művelet nem ütközik.
 
-Ez kézzel bármikor átállítható a crop ablakban.
+## 3. Gyors képhely-menü
+Kijelölt terméknél közvetlenül elérhető:
+- Másik termék
+- Újravágás
+- AUTO / Kitöltés / Teljes kép
+- Zoom
+- Képfájl csere
+- Hely ürítése
 
-## A plakát tényleges blokkja számít
-Az AUTO képkezelés most már a valós blokkot nézi:
-- 2× blokk + 2 kép = két normál képhely
-- 2× blokk + 1 kép = dupla képhely
-- 3× blokk + 1 kép = széles képhely
-- 4× blokk + 1 kép = teljes soros képhely
-- 4× blokk + 2 kép = két dupla képhely
+## 4. Valódi export-előnézet
+A plakát letöltés előtt ugyanazzal az export pipeline-nal elkészül,
+mint a végleges fájl.
 
-Így egy széles/kollázs fotó nem ugyanazzal a szabállyal jelenik meg egy normál és egy széles blokkban.
+Az előnézetből tölthető le:
+- PNG
+- JPG
 
-## Újravágás
-Ha a termék már plakáton van, az „Újravágás” a termék aktuális plakáthelyének arányával nyitja meg az előnézetet.
+Így crop, logó, háttér és automatikus üreshely-rendezés még letöltés előtt ellenőrizhető.
 
-## Export
-A V8.2 crop-hű PNG exportja is az aktuális blokk célméretét használja.
+## 5. JPG export
+- állítható JPG minőség: 70–100%
+- alapérték: 92%
+- plakát: PNG vagy JPG
+- katalógus: PDF vagy JPG
+- többoldalas katalógusnál oldalanként külön JPG készül
+
+## 6. Stabilitási javítás
+A logó globális pointer eseménykezelői renderelésenként már nem halmozódnak;
+az előző listener automatikusan megszűnik.
+
+## Megmaradt a V8.4-ből
+- stabil interaktív logó
+- pontosabb plakátháttér-export
+- 1× / 2× / 3× / 4× blokkarány-tudatos crop
+- crop-hű PNG/JPG képraszterizálás
+- intelligens üreshely-tömörítés
+- új katalógus
+- szezonális hátterek
+- automatikus mentés és teljes JSON biztonsági mentés
