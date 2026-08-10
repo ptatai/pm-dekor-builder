@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#6d1720">
-  <title>PM Dekor – Plakát és katalógus szerkesztő v8.2</title>
+  <title>PM Dekor – Plakát és katalógus szerkesztő v8.3</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div>
     <div class="eyebrow">PM DEKOR</div>
-    <h1>Plakát és katalógus szerkesztő <span class="version">v8.2</span></h1>
+    <h1>Plakát és katalógus szerkesztő <span class="version">v8.3</span></h1>
   </div>
   <div class="header-right">
     <div class="header-statuses">
@@ -52,7 +52,7 @@
           <label class="check"><input id="posterInput" type="checkbox" checked><span>Kerüljön a plakátra</span></label>
 
           <div class="mini-box">
-            <h3>Képkezelés</h3><p class="note">Az AUTO mód megpróbálja értelmesen kezelni a nagyon széles, nagyon magas vagy kollázs jellegű fotókat is.</p>
+            <h3>Képkezelés</h3><p class="note">Az AUTO mód a kép arányát és a célblokk szélességét együtt kezeli. Feltöltéskor külön választható normál, dupla, széles vagy teljes soros blokk.</p>
             <label>Megjelenítés
               <select id="frameModeInput">
                 <option value="auto">AUTO – intelligens</option>
@@ -396,10 +396,10 @@
         </div>
         <label>Előnézeti blokk
           <select id="cropTargetKind">
-            <option value="generic">Általános</option>
-            <option value="small">Felső kisebb blokk</option>
-            <option value="big">Középső magasabb blokk</option>
-            <option value="bottom">Alsó blokk</option>
+            <option value="normal">1× normál blokk</option>
+            <option value="double">2× dupla blokk</option>
+            <option value="wide">3× széles blokk</option>
+            <option value="full">4× teljes sor</option>
           </select>
         </label>
         <label>Megjelenítés

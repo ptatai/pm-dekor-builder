@@ -1,33 +1,37 @@
-# PM Dekor szerkesztő v8.2
+# PM Dekor szerkesztő v8.3
 
-Ez a verzió két, kész plakátnál kritikus exporthibát javít.
+## Fő javítás: a kép feltöltése már ismeri a blokk szélességét
 
-## 1. Crop / zoom / eltolás pontos PNG export
-Korábban a böngészős előnézetben jól beállított kép a PNG exportban eltérően jelenhetett meg.
+Korábban a crop ablak még a régi „felső / középső / alsó” logikát használta,
+miközben a plakátban már 1×, 2×, 3× és 4× széles blokkok vannak.
 
-V8.2-ben:
-- az export előtt minden plakátkép külön raszterizálódik,
-- a tényleges AUTO / Teljes kép / Kitöltés mód alapján,
-- ugyanazzal a zoommal,
-- ugyanazzal az X/Y eltolással,
-- a html2canvas már a kész rasztert exportálja.
+V8.3-ban a crop célpontjai:
+- 1× normál blokk
+- 2× dupla blokk
+- 3× széles blokk
+- 4× teljes sor
 
-Ez lényegesen stabilabb, mint a CSS transform közvetlen exportja.
+## Automatikus felismerés feltöltéskor
+A feltöltött kép képaránya alapján a program előre választ egy valószínű célblokkot:
+- normál
+- dupla
+- széles
+- teljes sor
 
-## 2. Kevés termék esetén intelligens tömörítés
-Ha az exportnál elrejtjük az üres helyeket:
-- a részben üres blokkokból az üres képcellák is eltűnnek,
-- a teljesen üres blokkok eltűnnek,
-- a teljesen üres sorok eltűnnek,
-- a megmaradó részleges sorok szélessége újraszámolódik,
-- 1–3 sor esetén a termékek nem nyúlnak szét függőlegesen az egész plakáton,
-- a ritka elrendezés automatikusan középre rendeződik.
+Ez kézzel bármikor átállítható a crop ablakban.
 
-## Megmaradt
-- V8.1 új katalógus
-- szezonális hátterek
-- interaktív logó
-- automatikus mentés
-- biztonsági mentés / visszaállítás
-- plakát export előtti figyelmeztetés
-- PNG plakát és PDF katalógus export
+## A plakát tényleges blokkja számít
+Az AUTO képkezelés most már a valós blokkot nézi:
+- 2× blokk + 2 kép = két normál képhely
+- 2× blokk + 1 kép = dupla képhely
+- 3× blokk + 1 kép = széles képhely
+- 4× blokk + 1 kép = teljes soros képhely
+- 4× blokk + 2 kép = két dupla képhely
+
+Így egy széles/kollázs fotó nem ugyanazzal a szabállyal jelenik meg egy normál és egy széles blokkban.
+
+## Újravágás
+Ha a termék már plakáton van, az „Újravágás” a termék aktuális plakáthelyének arányával nyitja meg az előnézetet.
+
+## Export
+A V8.2 crop-hű PNG exportja is az aktuális blokk célméretét használja.

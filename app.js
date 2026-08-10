@@ -134,7 +134,7 @@ async function dbClear(store){
 }
 
 function normProduct(p){
-  return {category:'',description:'',posterLabel:'',onPoster:true,frameMode:'auto',scale:100,offsetX:0,offsetY:0,order:999,imageWidth:null,imageHeight:null,...p};
+  return {category:'',description:'',posterLabel:'',onPoster:true,frameMode:'auto',scale:100,offsetX:0,offsetY:0,order:999,imageWidth:null,imageHeight:null,preferredTargetKind:'normal',...p};
 }
 function esc(s=''){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
 function setAccent(hex){
@@ -184,52 +184,93 @@ function getSlotKindByPosterIndex(idx){
   if(idx>=8 && idx<=10) return 'bottom';
   return 'generic';
 }
+function getBlockSlotKind(block){
+  const count=Math.max(1,Math.min(3,Number(block?.imageCount)||1));
+  const units=Math.max(1,Math.min(4,Number(block?.units)||1));
+  const perImageUnits=units/count;
+
+  if(perImageUnits<=1.35) return 'normal';
+  if(perImageUnits<=2.30) return 'double';
+  if(perImageUnits<=3.30) return 'wide';
+  return 'full';
+}
+
 function getProductSlotKind(id){
-  return 'generic';
+  const matches=[];
+  (settings.posterRows||[]).forEach(row=>{
+    (row.blocks||[]).forEach(block=>{
+      if((block.productIds||[]).some(pid=>Number(pid)===Number(id))){
+        matches.push(getBlockSlotKind(block));
+      }
+    });
+  });
+
+  if(matches.length){
+    const rank={normal:1,double:2,wide:3,full:4};
+    return matches.sort((a,b)=>(rank[b]||0)-(rank[a]||0))[0];
+  }
+
+  const p=products.find(x=>Number(x.id)===Number(id));
+  return p?.preferredTargetKind || 'normal';
 }
-function getTargetRatio(kind='generic'){
-  return {generic:1.02,catalog:1.18,small:0.99,big:0.77,bottom:1.01}[kind] || 1;
+
+function getTargetRatio(kind='normal'){
+  return {
+    normal:0.95,
+    double:1.75,
+    wide:2.55,
+    full:3.35,
+    generic:1.02,
+    catalog:1.18
+  }[kind] || 1;
 }
-function getSmartImageRecommendation(width,height,targetKind='generic'){
+
+function getTargetLabel(kind='normal'){
+  return {
+    normal:'1× normál blokk',
+    double:'2× dupla blokk',
+    wide:'3× széles blokk',
+    full:'4× teljes sor',
+    catalog:'katalógus',
+    generic:'általános blokk'
+  }[kind] || 'általános blokk';
+}
+
+function detectUploadTargetKind(width,height){
+  const ar=(width&&height)?width/height:1;
+  if(ar>=2.80) return 'full';
+  if(ar>=1.72) return 'wide';
+  if(ar>=1.28) return 'double';
+  return 'normal';
+}
+function getSmartImageRecommendation(width,height,targetKind='normal'){
   const ar=(width&&height)?width/height:1;
   let recommendation='Normál arányú kép';
   let suggested='cover';
 
   if(targetKind==='catalog'){
-    if(ar>1.08){
-      suggested='contain';
-      recommendation='Széles vagy kollázs kép – a katalógusban a „Teljes kép” ajánlott.';
-    }else if(ar<0.96){
-      suggested='contain';
-      recommendation='Álló jellegű kép – a katalógusban a „Teljes kép” ajánlott.';
-    }else{
-      suggested='cover';
-      recommendation='Jól illeszkedő katalógusfotó.';
-    }
-    return {aspect:ar,suggested,recommendation};
-  }
-
-  if(targetKind==='generic'){
-    if(ar>1.06){
-      suggested='contain';
-      recommendation='Széles vagy kollázs kép – a plakáton a „Teljes kép” ajánlott.';
-    }else if(ar<0.96){
-      suggested='contain';
-      recommendation='Álló jellegű kép – a plakáton a „Teljes kép” ajánlott.';
-    }else{
-      suggested='cover';
-      recommendation='Normál termékfotó – jól működik kitöltéssel.';
-    }
-    return {aspect:ar,suggested,recommendation};
-  }
-
-  if(ar>1.5 || ar<0.78){
     suggested='contain';
-    recommendation='Erősen eltérő képarány – a „Teljes kép” ajánlott.';
+    recommendation='A katalógus mindig a teljes termékképet mutatja.';
+    return {aspect:ar,suggested,recommendation};
   }
+
+  const targetRatio=getTargetRatio(targetKind);
+  const ratioToTarget=ar/targetRatio;
+
+  if(ratioToTarget<0.72 || ratioToTarget>1.42){
+    suggested='contain';
+    recommendation=`A kép aránya jelentősen eltér a(z) ${getTargetLabel(targetKind)} arányától – a „Teljes kép” ajánlott.`;
+  }else if(ratioToTarget<0.86 || ratioToTarget>1.20){
+    suggested='cover';
+    recommendation=`Használható a(z) ${getTargetLabel(targetKind)} helyen, enyhe vágással.`;
+  }else{
+    suggested='cover';
+    recommendation=`Jól illeszkedik a(z) ${getTargetLabel(targetKind)} arányához.`;
+  }
+
   return {aspect:ar,suggested,recommendation};
 }
-function getSmartDefaults(width,height,targetKind='generic'){
+function getSmartDefaults(width,height,targetKind='normal'){
   const rec=getSmartImageRecommendation(width,height,targetKind);
   let scale=100, offsetX=0, offsetY=0;
   if(rec.suggested==='contain'){
@@ -239,13 +280,13 @@ function getSmartDefaults(width,height,targetKind='generic'){
   }
   return {frameMode:'auto',scale,offsetX,offsetY,recommendation:rec.recommendation};
 }
-function getEffectiveFrameMode(p, targetKind='generic'){
+function getEffectiveFrameMode(p, targetKind='normal'){
   const mode=p.frameMode || 'cover';
   if(mode!=='auto') return mode;
   const rec=getSmartImageRecommendation(p.imageWidth||0,p.imageHeight||0,targetKind);
   return rec.suggested;
 }
-function mediaModeClass(p,targetKind='generic'){
+function mediaModeClass(p,targetKind='normal'){
   return getEffectiveFrameMode(p,targetKind)==='contain' ? 'contain' : 'cover';
 }
 
@@ -268,7 +309,7 @@ function renderCropPreview(){
   preview.querySelector('img').src=cropState.image;
   preview.querySelector('img').style.transform=mediaTransform(cropState);
   const rec=getSmartImageRecommendation(cropState.imageWidth,cropState.imageHeight,cropState.targetKind);
-  $('#cropMeta').innerHTML=`Méret: <strong>${cropState.imageWidth} × ${cropState.imageHeight}</strong><br>${esc(rec.recommendation)}<div class="crop-recommend">Ajánlott cél: ${cropState.targetKind==='small'?'felső kisebb blokk':cropState.targetKind==='big'?'középső magasabb blokk':cropState.targetKind==='bottom'?'alsó blokk':'általános'}</div>`;
+  $('#cropMeta').innerHTML=`Méret: <strong>${cropState.imageWidth} × ${cropState.imageHeight}</strong><br>${esc(rec.recommendation)}<div class="crop-recommend">Előnézet: ${esc(getTargetLabel(cropState.targetKind))}</div>`;
   syncCropLabels();
 }
 function applySmartCropDefaults(){
@@ -282,8 +323,8 @@ function applySmartCropDefaults(){
 }
 function openCropModal(config){
   cropState={...config};
-  $('#cropTargetKind').value=config.targetKind || 'generic';
-  const smart=getSmartDefaults(config.imageWidth,config.imageHeight,config.targetKind||'generic');
+  $('#cropTargetKind').value=config.targetKind || 'normal';
+  const smart=getSmartDefaults(config.imageWidth,config.imageHeight,config.targetKind||'normal');
   $('#cropFrameMode').value=config.frameMode || smart.frameMode;
   $('#cropScale').value=config.scale ?? smart.scale;
   $('#cropX').value=config.offsetX ?? smart.offsetX;
@@ -304,11 +345,12 @@ async function commitCropModal(){
     frameMode:$('#cropFrameMode').value,
     scale:Number($('#cropScale').value),
     offsetX:Number($('#cropX').value),
-    offsetY:Number($('#cropY').value)
+    offsetY:Number($('#cropY').value),
+    preferredTargetKind:$('#cropTargetKind').value
   };
   if(cropState.mode==='new'){
     pendingImage=payload.image;
-    pendingImageMeta={width:payload.imageWidth,height:payload.imageHeight};
+    pendingImageMeta={width:payload.imageWidth,height:payload.imageHeight,preferredTargetKind:payload.preferredTargetKind};
     $('#thumbPreview').innerHTML=`<img src="${payload.image}" alt="">`;
     $('#frameModeInput').value=payload.frameMode;
     $('#scaleInput').value=payload.scale;
@@ -526,7 +568,7 @@ function renderPosterUi(){
       image:p.image,
       imageWidth:p.imageWidth||1000,
       imageHeight:p.imageHeight||1000,
-      targetKind:'generic',
+      targetKind:getProductSlotKind(p.id),
       frameMode:p.frameMode,
       scale:p.scale,
       offsetX:p.offsetX,
@@ -948,6 +990,7 @@ function renderV7Block(block,rowUsed,align){
   const price=(block.priceLabel||'').trim() || automaticBlockPrice(block);
   const variant=block.variant || 'classic';
   const imageCount=Math.max(1,Math.min(3,Number(block.imageCount)||1));
+  const slotKind=getBlockSlotKind(block);
   const widthStyle=align==='spread' ? `width:${block.units/4*100}%` : `flex:${block.units} 1 0`;
 
   const cellMarkup = items.map((p,idx)=>{
@@ -958,7 +1001,7 @@ function renderV7Block(block,rowUsed,align){
       </div>` : `<div class="v7-mini-head empty"><div class="v7-mini-price">—</div><div class="v7-mini-title">${idx+1}. kép helye</div></div>`;
 
     return p
-      ? `<div class="v7-media-cell media-frame ${mediaModeClass(p,'generic')}" data-product-id="${p.id}" data-slot-kind="generic">
+      ? `<div class="v7-media-cell media-frame ${mediaModeClass(p,slotKind)}" data-product-id="${p.id}" data-slot-kind="${slotKind}">
            ${variant==='classic' ? mini : ''}
            <img src="${p.image}" alt="">
          </div>`
@@ -1443,7 +1486,7 @@ $('#editRecropBtn').onclick=()=>{
     image:p.image,
     imageWidth:p.imageWidth||1000,
     imageHeight:p.imageHeight||1000,
-    targetKind:'generic',
+    targetKind:getProductSlotKind(p.id),
     frameMode:p.frameMode,
     scale:p.scale,
     offsetX:p.offsetX,
@@ -1496,7 +1539,8 @@ $('#imageInput').onchange=async e=>{
   if(!file) return;
   const image=await fileToData(file);
   const meta=await getImageMetaFromData(image);
-  openCropModal({mode:'new',image,imageWidth:meta.width,imageHeight:meta.height,targetKind:'generic'});
+  const targetKind=detectUploadTargetKind(meta.width,meta.height);
+  openCropModal({mode:'new',image,imageWidth:meta.width,imageHeight:meta.height,targetKind});
 };
 $('#productForm').onsubmit=async e=>{
   pushHistory();
@@ -1516,6 +1560,7 @@ $('#productForm').onsubmit=async e=>{
     scale:Number($('#scaleInput').value),
     offsetX:Number($('#offsetXInput').value),
     offsetY:Number($('#offsetYInput').value),
+    preferredTargetKind:pendingImageMeta?.preferredTargetKind || 'normal',
     order:products.length
   }));
   e.target.reset();
@@ -1644,7 +1689,7 @@ document.addEventListener('keydown',e=>{
 });
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"8.2",settings,assets,products};
+  const payload={version:"8.3",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1963,7 +2008,8 @@ async function rasterizePosterImagesForExport(clone,pixelRatio=2){
     ctx.scale(pixelRatio,pixelRatio);
     ctx.clearRect(0,0,fw,fh);
 
-    const mode=getEffectiveFrameMode(p,'generic');
+    const slotKind=frame.dataset.slotKind || getProductSlotKind(p.id);
+    const mode=getEffectiveFrameMode(p,slotKind);
     const fitScale=mode==='contain'
       ? Math.min(fw/iw,fh/ih)
       : Math.max(fw/iw,fh/ih);

@@ -2124,3 +2124,35 @@ input[type="color"]{height:42px;padding:4px}
 .export-snapshot .v7-block-media.slots-3{
   grid-template-columns:repeat(3,minmax(0,1fr)) !important;
 }
+
+
+/* ==========================================================
+   V8.3 – célblokk-alapú képkezelés
+   ========================================================== */
+
+.crop-preview.normal{
+  width:235px;
+  height:250px;
+}
+.crop-preview.double{
+  width:420px;
+  height:250px;
+}
+.crop-preview.wide{
+  width:600px;
+  height:250px;
+}
+.crop-preview.full{
+  width:760px;
+  height:228px;
+}
+
+/* A régi crop target osztályok kompatibilitásként maradhatnak, de az új UI ezeket használja. */
+@media(max-width:980px){
+  .crop-preview.double,
+  .crop-preview.wide,
+  .crop-preview.full{
+    max-width:100%;
+    width:100%;
+  }
+}
