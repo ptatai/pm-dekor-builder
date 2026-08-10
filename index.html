@@ -4,20 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#6d1720">
-  <title>PM Dekor – Plakát és katalógus szerkesztő v7.12</title>
+  <title>PM Dekor – Plakát és katalógus szerkesztő v8.0</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div>
     <div class="eyebrow">PM DEKOR</div>
-    <h1>Plakát és katalógus szerkesztő <span class="version">v7.12</span></h1>
+    <h1>Plakát és katalógus szerkesztő <span class="version">v8.0</span></h1>
   </div>
-  <div class="runtime-status" id="runtimeStatus">JavaScript indul…</div><div class="header-actions">
-    <button class="btn soft" id="demoBtn">Mintaadatok</button>
-    <button class="btn soft" id="backupBtn">Mentés fájlba</button>
-    <label class="btn soft file-btn">Mentés betöltése<input id="restoreInput" type="file" accept=".json,application/json"></label>
-    <button class="btn danger" id="clearBtn">Minden törlése</button>
+  <div class="header-right">
+    <div class="header-statuses">
+      <div class="autosave-status saved" id="autosaveStatus">✓ Minden módosítás mentve</div>
+      <div class="runtime-status" id="runtimeStatus">JavaScript indul…</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn soft help-btn" id="helpBtn" type="button">? Súgó</button>
+      <button class="btn soft" id="demoBtn">Mintaadatok</button>
+      <button class="btn soft" id="backupBtn">Biztonsági mentés letöltése</button>
+      <label class="btn soft file-btn">Biztonsági mentés betöltése<input id="restoreInput" type="file" accept=".json,application/json"></label>
+      <button class="btn danger" id="clearBtn">Minden törlése</button>
+    </div>
   </div>
 </header>
 
@@ -185,6 +192,15 @@
           <p class="note">Duplakatt a fő szövegeken a gyors szerkesztéshez. Húzz egy képfájlt közvetlenül a plakáton lévő képhelyre, ha gyorsan cserélni szeretnéd.</p>
         </div>
 
+        <div class="mini-box export-options">
+          <h3>Export</h3>
+          <label class="check">
+            <input id="hideEmptyOnExport" type="checkbox" checked>
+            <span>Üres blokkok elrejtése a kész plakáton</span>
+          </label>
+          <p class="note">Szerkesztés közben az üres helyek megmaradnak, de exportnál eltűnhetnek.</p>
+        </div>
+
         <button class="btn primary" id="exportPosterBtn">Plakát letöltése PNG-ben</button>
 
       </aside>
@@ -291,6 +307,26 @@
     </div>
   </article>
 </template>
+
+
+<div class="modal hidden" id="helpModal">
+  <div class="modal-card help-modal-card">
+    <div class="modal-head">
+      <h2>Gyors súgó</h2>
+      <button class="icon-btn" id="closeHelpBtn" type="button">×</button>
+    </div>
+    <div class="help-steps">
+      <div><strong>1.</strong><span><b>Termék:</b> tölts fel képet, add meg a nevet, árat, kategóriát és a rövid plakát alcímet.</span></div>
+      <div><strong>2.</strong><span><b>Képigazítás:</b> AUTO általában elég; szükség esetén válts Teljes kép / Kitöltés módra, vagy nyisd újra a cropot.</span></div>
+      <div><strong>3.</strong><span><b>Plakát:</b> építs sorokat és blokkokat, majd minden képhelyhez válassz terméket.</span></div>
+      <div><strong>4.</strong><span><b>Közvetlen szerkesztés:</b> képet húzhatsz a kereten belül; a logót közvetlenül is mozgathatod és méretezheted.</span></div>
+      <div><strong>5.</strong><span><b>Háttér:</b> válassz szezonális hátteret a legördülőből, vagy tölts fel sajátot.</span></div>
+      <div><strong>6.</strong><span><b>Katalógus:</b> állítsd be a termékek számát oldalanként és szükség esetén szűrj kategóriára.</span></div>
+      <div><strong>7.</strong><span><b>Biztonság:</b> a munka automatikusan mentődik a böngészőbe; nagyobb munka után tölts le külön biztonsági mentést is.</span></div>
+    </div>
+    <button class="btn primary help-close-main" id="closeHelpMainBtn" type="button">Rendben</button>
+  </div>
+</div>
 
 <div class="modal hidden" id="editModal">
   <div class="modal-card">

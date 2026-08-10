@@ -4,6 +4,26 @@ window.addEventListener('error', function(e){
   if(el){ el.textContent='Hiba: '+(e.message||'JavaScript hiba'); el.classList.add('bad'); }
 });
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+
+let autosaveTimer=null;
+function setAutosaveStatus(text,state='saved'){
+  const el=$('#autosaveStatus');
+  if(!el) return;
+  el.textContent=text;
+  el.classList.remove('saved','saving','error');
+  el.classList.add(state);
+}
+function markSaving(){
+  setAutosaveStatus('Mentés…','saving');
+}
+function markAutoSaved(){
+  clearTimeout(autosaveTimer);
+  setAutosaveStatus('✓ Minden módosítás mentve','saved');
+  autosaveTimer=setTimeout(()=>setAutosaveStatus('✓ Minden módosítás mentve','saved'),900);
+}
+function markSaveError(){
+  setAutosaveStatus('⚠ Mentési hiba','error');
+}
 const DB_NAME='pm-dekor-v63', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v63';
 let products=[], pendingImage='', pendingImageMeta=null, selectedId=null, dragState=null, undoStack=[], redoStack=[], previewMode=false, cropState=null, logoSelected=false, logoDragState=null;
 
@@ -21,7 +41,8 @@ const defaults={
   logoVisible:true,
   logoScale:100,
   logoOffsetX:0,
-  logoOffsetY:0
+  logoOffsetY:0,
+  hideEmptyOnExport:true
 };
 
 const DEFAULT_POSTER_ROWS=[
@@ -76,35 +97,39 @@ async function dbGetAll(store){
   });
 }
 async function dbAdd(store,obj){
+  markSaving();
   const db=await openDb();
   return new Promise((resolve,reject)=>{
     const req=db.transaction(store,'readwrite').objectStore(store).add(obj);
-    req.onsuccess=()=>resolve(req.result);
-    req.onerror=()=>reject(req.error);
+    req.onsuccess=()=>{ markAutoSaved(); resolve(req.result); };
+    req.onerror=()=>{ markSaveError(); reject(req.error); };
   });
 }
 async function dbPut(store,obj){
+  markSaving();
   const db=await openDb();
   return new Promise((resolve,reject)=>{
     const req=db.transaction(store,'readwrite').objectStore(store).put(obj);
-    req.onsuccess=()=>resolve(req.result);
-    req.onerror=()=>reject(req.error);
+    req.onsuccess=()=>{ markAutoSaved(); resolve(req.result); };
+    req.onerror=()=>{ markSaveError(); reject(req.error); };
   });
 }
 async function dbDelete(store,key){
+  markSaving();
   const db=await openDb();
   return new Promise((resolve,reject)=>{
     const req=db.transaction(store,'readwrite').objectStore(store).delete(key);
-    req.onsuccess=()=>resolve();
-    req.onerror=()=>reject(req.error);
+    req.onsuccess=()=>{ markAutoSaved(); resolve(); };
+    req.onerror=()=>{ markSaveError(); reject(req.error); };
   });
 }
 async function dbClear(store){
+  markSaving();
   const db=await openDb();
   return new Promise((resolve,reject)=>{
     const req=db.transaction(store,'readwrite').objectStore(store).clear();
-    req.onsuccess=()=>resolve();
-    req.onerror=()=>reject(req.error);
+    req.onsuccess=()=>{ markAutoSaved(); resolve(); };
+    req.onerror=()=>{ markSaveError(); reject(req.error); };
   });
 }
 
@@ -667,7 +692,9 @@ function createRow(unitsList=[1]){
 }
 function savePosterRows(){
   ensurePosterRows();
+  markSaving();
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+  markAutoSaved();
 }
 
 function pruneLayoutProductIds(){
@@ -940,7 +967,7 @@ function renderV7Block(block,rowUsed,align){
          </div>`;
   }).join('');
 
-  return `<div class="v7-block v7-variant-${variant}" style="${widthStyle}">
+  return `<div class="v7-block v7-variant-${variant}" data-units="${block.units}" style="${widthStyle}">
     <div class="v7-block-head">
       <div class="v7-block-price">${esc(price)}</div>
       <div class="v7-block-title">${esc(title)}</div>
@@ -991,8 +1018,10 @@ function syncLogoPanelFromSettings(){
   syncLogoControlLabels();
 }
 function saveLogoLayout(){
+  markSaving();
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
   syncLogoPanelFromSettings();
+  markAutoSaved();
 }
 function bindInteractiveLogo(){
   const host=$('#posterCanvas');
@@ -1492,6 +1521,7 @@ function loadSettingsUi(){
     if($('#'+id) && settings[id]!==undefined) $('#'+id).value=settings[id];
   });
   if($('#logoVisible')) $('#logoVisible').checked = settings.logoVisible !== false;
+  if($('#hideEmptyOnExport')) $('#hideEmptyOnExport').checked = settings.hideEmptyOnExport !== false;
   setAccent(settings.accentColor);
   updateAddLabels();
   syncLogoControlLabels();
@@ -1513,7 +1543,10 @@ $('#saveSettingsBtn').onclick=()=>{
   settings.logoScale=Number($('#logoScale').value);
   settings.logoOffsetX=Number($('#logoOffsetX').value);
   settings.logoOffsetY=Number($('#logoOffsetY').value);
+  if($('#hideEmptyOnExport')) settings.hideEmptyOnExport=$('#hideEmptyOnExport').checked;
+  markSaving();
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+  markAutoSaved();
   setAccent(settings.accentColor);
   renderAll();
   alert('Beállítások elmentve.');
@@ -1566,12 +1599,41 @@ function renderAssetPreviews(){
   $('#logoPreview').innerHTML=assets.logo ? `<img src="${assets.logo}" alt="PM Dekor logó">` : 'Nincs saját logó – a szöveges PM logó látszik.';
 }
 
+
+if($('#hideEmptyOnExport')){
+  $('#hideEmptyOnExport').addEventListener('change',()=>{
+    settings.hideEmptyOnExport=$('#hideEmptyOnExport').checked;
+    markSaving();
+    localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+    markAutoSaved();
+  });
+}
+
+
+function openHelp(){
+  $('#helpModal')?.classList.remove('hidden');
+}
+function closeHelp(){
+  $('#helpModal')?.classList.add('hidden');
+}
+if($('#helpBtn')) $('#helpBtn').onclick=openHelp;
+if($('#closeHelpBtn')) $('#closeHelpBtn').onclick=closeHelp;
+if($('#closeHelpMainBtn')) $('#closeHelpMainBtn').onclick=closeHelp;
+if($('#helpModal')){
+  $('#helpModal').addEventListener('click',e=>{
+    if(e.target===$('#helpModal')) closeHelp();
+  });
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && !$('#helpModal')?.classList.contains('hidden')) closeHelp();
+});
+
 $('#backupBtn').onclick=()=>{
-  const payload={version:"7.12",settings,assets,products};
+  const payload={version:"8.0",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='pm-dekor-mentes.json';
+  a.download='pm-dekor-biztonsagi-mentes.json';
   a.click();
   URL.revokeObjectURL(a.href);
 };
@@ -1731,6 +1793,77 @@ async function waitForRenderableAssets(root){
 }
 
 
+
+function getPosterExportIssues(){
+  ensurePosterRows();
+  const validProducts=new Map(products.map(p=>[Number(p.id),p]));
+  let emptyBlocks=0, emptySlots=0, missingImages=0;
+
+  settings.posterRows.forEach(row=>{
+    (row.blocks||[]).forEach(block=>{
+      const count=Math.max(1,Math.min(3,Number(block.imageCount)||1));
+      const ids=Array.from({length:count},(_,i)=>block.productIds?.[i] ? Number(block.productIds[i]) : null);
+      const assigned=ids.filter(Boolean);
+      if(!assigned.length){
+        emptyBlocks++;
+        emptySlots+=count;
+        return;
+      }
+      ids.forEach(id=>{
+        if(!id){
+          emptySlots++;
+          return;
+        }
+        const p=validProducts.get(id);
+        if(!p || !p.image) missingImages++;
+      });
+    });
+  });
+
+  return {emptyBlocks,emptySlots,missingImages};
+}
+
+function confirmPosterExport(){
+  const issues=getPosterExportIssues();
+  if(!issues.emptySlots && !issues.missingImages) return true;
+
+  const lines=['A plakát még nem teljes:'];
+  if(issues.emptySlots) lines.push(`• ${issues.emptySlots} üres képhely`);
+  if(issues.missingImages) lines.push(`• ${issues.missingImages} hiányzó termékkép`);
+  if(settings.hideEmptyOnExport!==false && issues.emptyBlocks){
+    lines.push(`• ${issues.emptyBlocks} teljesen üres blokk exportnál el lesz rejtve`);
+  }
+  lines.push('', 'Így is exportálod?');
+  return confirm(lines.join('\n'));
+}
+
+function preparePosterExportClone(clone){
+  clone.querySelectorAll('.poster-toolbar,.logo-resize-handle').forEach(el=>el.remove());
+  clone.querySelectorAll('.logo-disc').forEach(el=>el.classList.remove('logo-selected'));
+
+  if(settings.hideEmptyOnExport!==false){
+    clone.querySelectorAll('.dynamic-poster-row').forEach(row=>{
+      row.querySelectorAll('.v7-block').forEach(block=>{
+        if(!block.querySelector('.media-frame[data-product-id]')){
+          block.remove();
+        }
+      });
+
+      const inner=row.querySelector('.dynamic-row-inner');
+      const blocks=inner ? [...inner.querySelectorAll('.v7-block')] : [];
+      if(!blocks.length){
+        row.remove();
+        return;
+      }
+
+      const used=blocks.reduce((sum,b)=>sum+(Number(b.dataset.units)||1),0);
+      if(inner && !row.classList.contains('align-spread')){
+        inner.style.width=`${Math.min(100,used/4*100)}%`;
+      }
+    });
+  }
+}
+
 async function exportElementAsPng(node, fileName, scale=2){
   const host=document.createElement('div');
   host.className='export-host';
@@ -1742,8 +1875,7 @@ async function exportElementAsPng(node, fileName, scale=2){
   host.style.zIndex='-1';
   const clone=node.cloneNode(true);
   clone.classList.add('clean-preview','export-snapshot');
-  clone.querySelectorAll('.poster-toolbar,.logo-resize-handle').forEach(el=>el.remove());
-  clone.querySelectorAll('.logo-disc').forEach(el=>el.classList.remove('logo-selected'));
+  preparePosterExportClone(clone);
   host.appendChild(clone);
   document.body.appendChild(host);
   try{
@@ -1759,6 +1891,7 @@ async function exportElementAsPng(node, fileName, scale=2){
 }
 
 $('#exportPosterBtn').onclick=async()=>{
+  if(!confirmPosterExport()) return;
   const btn=$('#exportPosterBtn');
   btn.disabled=true; btn.textContent='Készül…';
   try{
