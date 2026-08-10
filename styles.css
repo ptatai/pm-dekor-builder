@@ -2655,3 +2655,79 @@ input[type="color"]{height:42px;padding:4px}
     grid-template-columns:1fr;
   }
 }
+
+
+/* ==========================================================
+   V8.6 – export stabilizálás
+   ========================================================== */
+
+/* A V8.4 örökölt szabálya exportnál relatívvá tette a fejlécet/láblécet.
+   Ez okozta, hogy a footer felugrott a címhez. Most explicit fix geometria van. */
+.poster.export-snapshot > .poster-head{
+  position:absolute !important;
+  top:30px !important;
+  left:32px !important;
+  right:32px !important;
+  bottom:auto !important;
+  height:166px !important;
+  margin:0 !important;
+  z-index:4 !important;
+}
+
+.poster.export-snapshot > .dynamic-rows{
+  position:absolute !important;
+  top:214px !important;
+  left:34px !important;
+  right:34px !important;
+  bottom:132px !important;
+  margin:0 !important;
+  z-index:3 !important;
+  overflow:hidden !important;
+}
+
+.poster.export-snapshot > .poster-footer{
+  position:absolute !important;
+  left:42px !important;
+  right:42px !important;
+  top:auto !important;
+  bottom:26px !important;
+  height:100px !important;
+  min-height:100px !important;
+  margin:0 !important;
+  z-index:4 !important;
+}
+
+/* Kevés terméknél a termékzóna felülről tömörödik; nem a plakát közepére nyújtjuk szét. */
+.poster.export-snapshot .dynamic-rows.export-compact-rows{
+  justify-content:flex-start !important;
+  align-content:flex-start !important;
+}
+
+/* Logó export: a belső DOM helyett egy előre elkészített, stabil raszter kerül a körbe. */
+.poster.export-snapshot .logo-disc .logo-export-raster{
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  max-width:none !important;
+  max-height:none !important;
+  object-fit:contain !important;
+  transform:none !important;
+  margin:0 !important;
+  z-index:10 !important;
+  pointer-events:none !important;
+}
+
+/* Exportban a logó belső CSS-elemei már nem vehetnek részt a layoutban. */
+.poster.export-snapshot .logo-disc .logo-inner,
+.poster.export-snapshot .logo-disc .logo-fallback{
+  display:none !important;
+}
+
+/* Az exportban kizárólag a termékterület lehet automatikusan tömörített. */
+.poster.export-snapshot .poster-head,
+.poster.export-snapshot .poster-footer{
+  flex:none !important;
+}
+
+/* JPG minőség fix 92%; nincs külön szerkesztői csúszka. */

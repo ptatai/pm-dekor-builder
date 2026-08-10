@@ -43,8 +43,7 @@ const defaults={
   logoScale:100,
   logoOffsetX:0,
   logoOffsetY:0,
-  hideEmptyOnExport:true,
-  jpgQuality:92
+  hideEmptyOnExport:true
 };
 
 const DEFAULT_POSTER_ROWS=[
@@ -1808,7 +1807,6 @@ $('#saveSettingsBtn').onclick=()=>{
   settings.logoOffsetX=Number($('#logoOffsetX').value);
   settings.logoOffsetY=Number($('#logoOffsetY').value);
   if($('#hideEmptyOnExport')) settings.hideEmptyOnExport=$('#hideEmptyOnExport').checked;
-  if($('#jpgQuality')) settings.jpgQuality=Number($('#jpgQuality').value);
   markSaving();
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
   markAutoSaved();
@@ -1861,21 +1859,6 @@ $('#backgroundMode').addEventListener('change',()=>{
   renderAll();
 });
 
-function syncJpgQualityUi(sourceValue=null){
-  const value=Math.max(70,Math.min(100,Number(sourceValue ?? settings.jpgQuality ?? 92)));
-  settings.jpgQuality=value;
-  if($('#jpgQuality')) $('#jpgQuality').value=value;
-  if($('#jpgQualityValue')) $('#jpgQualityValue').textContent=`${value}%`;
-  if($('#jpgQualityPreview')) $('#jpgQualityPreview').value=value;
-  if($('#jpgQualityPreviewValue')) $('#jpgQualityPreviewValue').textContent=`${value}%`;
-}
-
-function saveJpgQuality(value){
-  syncJpgQualityUi(value);
-  markSaving();
-  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
-  markAutoSaved();
-}
 
 function renderAssetPreviews(){
   $('#logoPreview').innerHTML=assets.logo ? `<img src="${assets.logo}" alt="PM Dekor logó">` : 'Nincs saját logó – a szöveges PM logó látszik.';
@@ -1891,14 +1874,6 @@ if($('#hideEmptyOnExport')){
   });
 }
 
-if($('#jpgQuality')){
-  $('#jpgQuality').addEventListener('input',()=>syncJpgQualityUi($('#jpgQuality').value));
-  $('#jpgQuality').addEventListener('change',()=>saveJpgQuality($('#jpgQuality').value));
-}
-if($('#jpgQualityPreview')){
-  $('#jpgQualityPreview').addEventListener('input',()=>syncJpgQualityUi($('#jpgQualityPreview').value));
-  $('#jpgQualityPreview').addEventListener('change',()=>saveJpgQuality($('#jpgQualityPreview').value));
-}
 
 
 
@@ -1940,7 +1915,7 @@ document.addEventListener('keydown',e=>{
 });
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"8.5",settings,assets,products};
+  const payload={version:"8.6",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -2212,7 +2187,7 @@ function compactPosterExportClone(clone){
   if(dynamicRows && visibleRows.length && visibleRows.length<=3){
     const rowHeight=visibleRows.length===1 ? 350 : visibleRows.length===2 ? 342 : 338;
     dynamicRows.classList.add('export-compact-rows');
-    dynamicRows.style.justifyContent='center';
+    dynamicRows.style.justifyContent='flex-start';
     visibleRows.forEach(row=>{
       row.style.flex=`0 0 ${rowHeight}px`;
       row.style.minHeight=`${rowHeight}px`;
@@ -2312,18 +2287,124 @@ function installExactPosterBackgroundForExport(clone){
   clone.style.setProperty('background-color','#faf4e8','important');
 }
 
+
+function lockPosterExportGeometry(clone){
+  const head=clone.querySelector(':scope > .poster-head');
+  const rows=clone.querySelector(':scope > .dynamic-rows');
+  const footer=clone.querySelector(':scope > .poster-footer');
+
+  if(head){
+    head.style.setProperty('position','absolute','important');
+    head.style.setProperty('top','30px','important');
+    head.style.setProperty('left','32px','important');
+    head.style.setProperty('right','32px','important');
+    head.style.setProperty('height','166px','important');
+    head.style.setProperty('bottom','auto','important');
+    head.style.setProperty('margin','0','important');
+  }
+
+  if(rows){
+    rows.style.setProperty('position','absolute','important');
+    rows.style.setProperty('top','214px','important');
+    rows.style.setProperty('left','34px','important');
+    rows.style.setProperty('right','34px','important');
+    rows.style.setProperty('bottom','132px','important');
+    rows.style.setProperty('margin','0','important');
+    rows.style.setProperty('overflow','hidden','important');
+  }
+
+  if(footer){
+    footer.style.setProperty('position','absolute','important');
+    footer.style.setProperty('left','42px','important');
+    footer.style.setProperty('right','42px','important');
+    footer.style.setProperty('bottom','26px','important');
+    footer.style.setProperty('top','auto','important');
+    footer.style.setProperty('height','100px','important');
+    footer.style.setProperty('min-height','100px','important');
+    footer.style.setProperty('margin','0','important');
+  }
+}
+
+function drawSpacedText(ctx,text,x,y,spacing){
+  const chars=[...String(text||'')];
+  const widths=chars.map(ch=>ctx.measureText(ch).width);
+  const total=widths.reduce((a,b)=>a+b,0)+Math.max(0,chars.length-1)*spacing;
+  let cursor=x-total/2;
+  chars.forEach((ch,i)=>{
+    ctx.fillText(ch,cursor,y);
+    cursor+=widths[i]+spacing;
+  });
+}
+
+async function rasterizePosterLogoForExport(clone,pixelRatio=2){
+  const disc=clone.querySelector('.logo-disc');
+  if(!disc || settings.logoVisible===false) return;
+
+  const baseW=Math.max(1,disc.offsetWidth||142);
+  const baseH=Math.max(1,disc.offsetHeight||142);
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.round(baseW*pixelRatio);
+  canvas.height=Math.round(baseH*pixelRatio);
+  const ctx=canvas.getContext('2d');
+  ctx.scale(pixelRatio,pixelRatio);
+  ctx.clearRect(0,0,baseW,baseH);
+
+  if(assets.logo){
+    try{
+      const source=await loadExportSourceImage(assets.logo,new Map());
+      const maxW=baseW*.76;
+      const maxH=baseH*.76;
+      const iw=source.naturalWidth||1;
+      const ih=source.naturalHeight||1;
+      const s=Math.min(maxW/iw,maxH/ih);
+      const w=iw*s, h=ih*s;
+      ctx.drawImage(source,(baseW-w)/2,(baseH-h)/2,w,h);
+    }catch(e){
+      console.warn('Logó raszterizálás sikertelen, fallback kerül exportba.',e);
+    }
+  }else{
+    const accent=settings.accentColor || '#741521';
+    const dark='#493a32';
+
+    ctx.textBaseline='middle';
+    ctx.textAlign='center';
+
+    ctx.fillStyle=accent;
+    ctx.font=`italic ${Math.round(baseW*.32)}px Georgia, serif`;
+    ctx.fillText('PM',baseW/2,baseH*.40);
+
+    ctx.fillStyle=dark;
+    ctx.font=`${Math.max(8,Math.round(baseW*.082))}px Georgia, serif`;
+    drawSpacedText(ctx,'DEKOR',baseW/2,baseH*.61,baseW*.015);
+
+    ctx.font=`${Math.max(7,Math.round(baseW*.061))}px Georgia, serif`;
+    drawSpacedText(ctx,'MELINDA',baseW/2,baseH*.72,baseW*.010);
+  }
+
+  disc.querySelectorAll('.logo-inner,.logo-fallback').forEach(el=>el.remove());
+
+  const flat=document.createElement('img');
+  flat.className='logo-export-raster';
+  flat.alt='';
+  flat.src=canvas.toDataURL('image/png');
+  disc.prepend(flat);
+}
+
 async function preparePosterExportClone(clone,node,scale=2){
   clone.querySelectorAll('.poster-toolbar,.logo-resize-handle,.slot-drag-handle,.empty-slot-pick').forEach(el=>el.remove());
   clone.querySelectorAll('.logo-disc').forEach(el=>el.classList.remove('logo-selected'));
 
   installExactPosterBackgroundForExport(clone);
+  lockPosterExportGeometry(clone);
   compactPosterExportClone(clone);
+  lockPosterExportGeometry(clone);
 
   // A DOM-nak előbb ki kell számolnia a végső export méreteket.
   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
 
-  // A plakátképeket export előtt raszterizáljuk a tényleges crop/zoom/offset alapján.
-  // Így a html2canvas már nem saját maga próbálja újraértelmezni a CSS transformot.
+  // A logó és a plakátképek is lapos raszterré válnak export előtt:
+  // így a html2canvasnak nem kell transzformált belső elemeket újrarenderelnie.
+  await rasterizePosterLogoForExport(clone,scale);
   await rasterizePosterImagesForExport(clone,scale);
 }
 
@@ -2362,7 +2443,7 @@ function downloadCanvas(canvas,format='png',fileBase='pm-dekor-plakat'){
   if(!canvas) return;
   const normalized=format==='jpg' ? 'jpg' : 'png';
   const mime=normalized==='jpg' ? 'image/jpeg' : 'image/png';
-  const quality=normalized==='jpg' ? Number(settings.jpgQuality||92)/100 : undefined;
+  const quality=normalized==='jpg' ? .92 : undefined;
   const a=document.createElement('a');
   a.download=`${fileBase}.${normalized}`;
   a.href=canvas.toDataURL(mime,quality);
@@ -2383,7 +2464,6 @@ async function openPosterExportPreview(){
     exportPreviewCanvas=await buildPosterExportCanvas(el,2);
     $('#exportPreviewImage').src=exportPreviewCanvas.toDataURL('image/png');
     $('#exportPreviewSize').textContent=`${exportPreviewCanvas.width} × ${exportPreviewCanvas.height} px`;
-    syncJpgQualityUi();
     $('#exportPreviewModal').classList.remove('hidden');
   }finally{
     btn.disabled=false;
