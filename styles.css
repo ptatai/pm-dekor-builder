@@ -786,3 +786,195 @@ input[type="color"]{height:42px;padding:4px}
   .block-editor-top .remove-layout-block{grid-column:2;justify-self:end}
   .block-slot-selects.cols-3{grid-template-columns:1fr}
 }
+
+
+/* ===============================
+   V7.3 – közelebb az eredeti plakáthoz
+   1) légiesebb blokkok
+   2) klasszikus blokk-típus
+   3) finomabb tipográfia és spacing
+   =============================== */
+
+.block-editor-top{
+  grid-template-columns:84px 138px 1fr 1fr 30px;
+}
+.poster .dynamic-rows{
+  top:214px;
+  left:34px;
+  right:34px;
+  bottom:132px;
+  gap:14px;
+}
+.poster .dynamic-poster-row{
+  flex:1 1 0;
+}
+.poster .dynamic-row-inner{
+  gap:10px;
+}
+.poster .v7-block{
+  background:transparent;
+  grid-template-rows:52px minmax(0,1fr);
+}
+.poster .v7-block-head{
+  padding:0 2px 3px;
+  gap:3px;
+}
+.poster .v7-block-price{
+  background:linear-gradient(180deg,#8a1930,#741521);
+  padding:6px 18px 7px;
+  font-size:18px;
+  font-weight:900;
+  border-radius:0;
+  clip-path:polygon(7% 0, 93% 0, 100% 50%, 93% 100%, 7% 100%, 0 50%);
+  box-shadow:0 4px 10px rgba(92,30,38,.18);
+}
+.poster .v7-block-title{
+  margin-top:1px;
+  font-size:11px;
+  line-height:1.16;
+  font-weight:800;
+  letter-spacing:.045em;
+  color:#3f342d;
+  text-transform:uppercase;
+}
+.poster .v7-block-media{
+  background:transparent;
+  border:0;
+  box-shadow:none;
+  gap:7px;
+  overflow:visible;
+}
+.poster .v7-media-cell{
+  border:1px solid rgba(189,164,126,.86);
+  border-radius:8px;
+  overflow:hidden;
+  background:transparent;
+  box-shadow:none;
+}
+.poster .v7-media-cell.media-frame{
+  box-shadow:none;
+}
+.poster .v7-media-cell::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg, rgba(255,252,247,.18), rgba(255,250,244,.08));
+  pointer-events:none;
+  z-index:0;
+}
+.poster .v7-media-cell img{
+  z-index:1;
+}
+.poster .v7-empty{
+  background:rgba(255,249,240,.22);
+  color:#8a7a6c;
+}
+
+/* klasszikus blokk: mini fejek minden kép fölött */
+.poster .v7-variant-classic .v7-media-cell{
+  display:grid;
+  grid-template-rows:48px minmax(0,1fr);
+  background:rgba(255,251,244,.14);
+}
+.poster .v7-variant-classic .v7-media-cell img{
+  grid-row:2;
+}
+.poster .v7-mini-head{
+  position:relative;
+  z-index:2;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  text-align:center;
+  padding:4px 6px 5px;
+  border-bottom:1px solid rgba(197,174,139,.82);
+  background:rgba(255,248,238,.82);
+  backdrop-filter:blur(2px);
+}
+.poster .v7-mini-head.empty{
+  background:rgba(255,248,238,.70);
+}
+.poster .v7-mini-price{
+  font-size:13px;
+  line-height:1.05;
+  font-weight:900;
+  color:#352822;
+}
+.poster .v7-mini-title{
+  font-size:10px;
+  line-height:1.12;
+  color:#5b4d43;
+  text-transform:uppercase;
+  letter-spacing:.035em;
+}
+
+/* szellős blokk: csak cím + kép, alig takar */
+.poster .v7-variant-airy .v7-block-head{
+  padding-bottom:5px;
+}
+.poster .v7-variant-airy .v7-block-price{
+  background:rgba(116,21,33,.96);
+}
+.poster .v7-variant-airy .v7-media-cell{
+  background:rgba(255,252,248,.06);
+}
+.poster .v7-variant-airy .v7-media-cell::before{
+  background:linear-gradient(180deg, rgba(255,252,247,.12), rgba(255,250,244,.04));
+}
+
+/* finomabb fejléc / lábléc */
+.poster-head{
+  top:30px;
+  left:32px;
+  right:32px;
+  height:166px;
+}
+.poster-title .script{
+  font-size:39px;
+}
+.poster-title h2{
+  font-size:56px;
+  letter-spacing:.03em;
+}
+.poster-title .tag{
+  font-size:13px;
+  letter-spacing:.04em;
+}
+.poster-footer{
+  bottom:26px;
+  left:42px;
+  right:42px;
+  padding-top:12px;
+}
+.poster-footer strong{
+  font-size:26px;
+  margin-bottom:4px;
+}
+.poster-footer .contacts{
+  font-size:12px;
+}
+.poster-footer .thanks{
+  font-size:12px;
+}
+
+/* középre igazított levegősebb dinamikus sorok */
+.poster .dynamic-poster-row.align-center .dynamic-row-inner,
+.poster .dynamic-poster-row.align-left .dynamic-row-inner,
+.poster .dynamic-poster-row.align-right .dynamic-row-inner{
+  max-width:100%;
+}
+
+@media(max-width:1100px){
+  .block-editor-top{
+    grid-template-columns:84px 130px 1fr;
+  }
+  .block-editor-top label:nth-child(3),
+  .block-editor-top label:nth-child(4){
+    grid-column:span 1;
+  }
+  .block-editor-top .remove-layout-block{
+    grid-column:auto;
+    justify-self:end;
+  }
+}

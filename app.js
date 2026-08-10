@@ -551,6 +551,7 @@ function ensurePosterRows(){
         units,
         title:block.title||'',
         priceLabel:block.priceLabel||'',
+        variant:block.variant||'classic',
         productIds:ids
       };
     })
@@ -561,7 +562,7 @@ function rowUsedUnits(row){
 }
 function createBlock(units=1){
   units=Math.max(1,Math.min(3,Number(units)||1));
-  return {id:uid('block'),units,title:'',priceLabel:'',productIds:Array(units).fill(null)};
+  return {id:uid('block'),units,title:'',priceLabel:'',variant:'classic',productIds:Array(units).fill(null)};
 }
 function createRow(unitsList=[1]){
   return {id:uid('row'),align:'center',blocks:unitsList.map(createBlock)};
@@ -621,6 +622,12 @@ function renderRowEditor(){
                   <option value="1" ${block.units===1?'selected':''}>1 képes</option>
                   <option value="2" ${block.units===2?'selected':''}>2 képes</option>
                   <option value="3" ${block.units===3?'selected':''}>3 képes</option>
+                </select>
+              </label>
+              <label>Típus
+                <select class="block-variant-select">
+                  <option value="classic" ${(block.variant||'classic')==='classic'?'selected':''}>Klasszikus plakát</option>
+                  <option value="airy" ${(block.variant||'classic')==='airy'?'selected':''}>Szellős</option>
                 </select>
               </label>
               <label>Közös cím
@@ -683,6 +690,9 @@ function renderRowEditor(){
         block.productIds=(block.productIds||[]).slice(0,next);
         while(block.productIds.length<next) block.productIds.push(null);
         savePosterRows(); renderAll();
+      };
+      blockEl.querySelector('.block-variant-select').onchange=e=>{
+        pushHistory(); block.variant=e.target.value; savePosterRows(); renderPoster();
       };
       blockEl.querySelector('.block-title-input').onchange=e=>{
         pushHistory(); block.title=e.target.value.trim(); savePosterRows(); renderPoster();
@@ -756,23 +766,45 @@ function automaticBlockTitle(block){
   const unique=[...new Set(values)];
   return unique.join(' + ') || 'ÜRES BLOKK';
 }
+
+function productShortTitle(p){
+  return (p?.description || p?.name || '').trim().slice(0,42);
+}
+function productShortPrice(p){
+  return (p?.price || '—').trim();
+}
+
 function renderV7Block(block,rowUsed,align){
   const items=blockProducts(block);
   const title=(block.title||'').trim() || automaticBlockTitle(block);
   const price=(block.priceLabel||'').trim() || automaticBlockPrice(block);
+  const variant=block.variant || 'classic';
   const widthStyle=align==='spread' ? `width:${block.units/4*100}%` : `flex:${block.units} 1 0`;
-  return `<div class="v7-block" style="${widthStyle}">
+
+  const cellMarkup = items.map((p,idx)=>{
+    const mini = p ? `
+      <div class="v7-mini-head">
+        <div class="v7-mini-price">${esc(productShortPrice(p))}</div>
+        <div class="v7-mini-title">${esc(productShortTitle(p) || ('Termék ' + (idx+1)))}</div>
+      </div>` : `<div class="v7-mini-head empty"><div class="v7-mini-price">—</div><div class="v7-mini-title">${idx+1}. kép helye</div></div>`;
+
+    return p
+      ? `<div class="v7-media-cell media-frame ${mediaModeClass(p,'generic')}" data-product-id="${p.id}" data-slot-kind="generic">
+           ${variant==='classic' ? mini : ''}
+           <img src="${p.image}" alt="">
+         </div>`
+      : `<div class="v7-media-cell v7-empty">
+           ${variant==='classic' ? mini : `<span>${idx+1}. kép helye</span>`}
+         </div>`;
+  }).join('');
+
+  return `<div class="v7-block v7-variant-${variant}" style="${widthStyle}">
     <div class="v7-block-head">
       <div class="v7-block-price">${esc(price)}</div>
       <div class="v7-block-title">${esc(title)}</div>
     </div>
     <div class="v7-block-media slots-${block.units}">
-      ${items.map((p,idx)=>p
-        ? `<div class="v7-media-cell media-frame ${mediaModeClass(p,'generic')}" data-product-id="${p.id}" data-slot-kind="generic">
-             <img src="${p.image}" alt="">
-           </div>`
-        : `<div class="v7-media-cell v7-empty">${idx+1}. kép helye</div>`
-      ).join('')}
+      ${cellMarkup}
     </div>
   </div>`;
 }
@@ -1263,7 +1295,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"7.0",settings,assets,products};
+  const payload={version:"7.3",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
