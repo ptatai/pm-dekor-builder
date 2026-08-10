@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#6d1720">
-  <title>PM Dekor – Plakát és katalógus szerkesztő v5</title>
+  <title>PM Dekor – Plakát és katalógus szerkesztő v5.3</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div>
     <div class="eyebrow">PM DEKOR</div>
-    <h1>Plakát és katalógus szerkesztő <span class="version">v5</span></h1>
+    <h1>Plakát és katalógus szerkesztő <span class="version">v5.3</span></h1>
   </div>
-  <div class="header-actions">
+  <div class="runtime-status" id="runtimeStatus">JavaScript indul…</div><div class="header-actions">
     <button class="btn soft" id="demoBtn">Mintaadatok</button>
     <button class="btn soft" id="backupBtn">Mentés fájlba</button>
     <label class="btn soft file-btn">Mentés betöltése<input id="restoreInput" type="file" accept=".json,application/json"></label>
@@ -93,12 +93,12 @@
           <h3>Háttér</h3>
           <label>Háttér mód
             <select id="backgroundMode">
-              <option value="template">Beépített PM Dekor sablon</option>
+              <option value="template">Beépített fotós PM háttér</option>
               <option value="custom">Saját háttérkép</option>
             </select>
           </label>
           <label>Saját háttér feltöltése<input id="backgroundInput" type="file" accept="image/*"></label>
-          <button class="btn tiny" type="button" id="removeBackgroundBtn">Saját háttér törlése</button>
+          <button class="btn tiny" type="button" id="removeBackgroundBtn">Saját háttér törlése</button><p class="note">A beépített háttér külön dekorációs réteg: nem tartalmaz fix belső termékkereteket, így nem rondít bele a fotókba.</p>
         </div>
 
         <div class="mini-box">

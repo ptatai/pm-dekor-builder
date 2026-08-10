@@ -1,5 +1,10 @@
+
+window.addEventListener('error', function(e){
+  const el=document.getElementById('runtimeStatus');
+  if(el){ el.textContent='Hiba: '+(e.message||'JavaScript hiba'); el.classList.add('bad'); }
+});
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const DB_NAME='pm-dekor-v5', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v5';
+const DB_NAME='pm-dekor-v52', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v52';
 let products=[], pendingImage='', selectedId=null, dragState=null;
 
 const defaults={
@@ -16,6 +21,7 @@ const defaults={
 };
 let settings={...defaults,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')};
 let assets={logo:'',background:''};
+const BUILTIN_POSTER_BG = 'pm-dekor-background.png';
 
 function openDb(){
   return new Promise((resolve,reject)=>{
@@ -132,13 +138,28 @@ function logoMarkup(){
   return `<div><div class="pm">PM</div><div class="brand">DEKOR</div><div class="small">MELINDA</div></div>`;
 }
 function cornerSvg(cls){
-  return `<svg class="corner ${cls}" viewBox="0 0 132 120" aria-hidden="true">
-    <path d="M10 106 C34 84 54 63 94 16" fill="none" stroke="#7a653e" stroke-width="3"/>
-    <ellipse cx="27" cy="84" rx="10" ry="21" fill="#b84538" transform="rotate(-44 27 84)"/>
-    <ellipse cx="49" cy="63" rx="9" ry="23" fill="#d38a3a" transform="rotate(-38 49 63)"/>
-    <ellipse cx="72" cy="42" rx="9" ry="22" fill="#8a3f2f" transform="rotate(-34 72 42)"/>
-    <ellipse cx="94" cy="22" rx="8" ry="18" fill="#e4b14e" transform="rotate(-25 94 22)"/>
-    <circle cx="108" cy="36" r="10" fill="#b53e57"/><circle cx="112" cy="48" r="8" fill="#c95d6f"/><circle cx="101" cy="46" r="8" fill="#a73043"/>
+  return `<svg class="corner ${cls}" viewBox="0 0 170 150" aria-hidden="true">
+    <path d="M8 139 C38 107 61 82 112 18" fill="none" stroke="#755c39" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M34 123 C61 103 85 82 142 55" fill="none" stroke="#8a6c43" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M54 99 C83 76 104 57 145 24" fill="none" stroke="#96754b" stroke-width="2.1" stroke-linecap="round"/>
+    <ellipse cx="28" cy="112" rx="11" ry="26" fill="#9d4634" transform="rotate(-49 28 112)"/>
+    <ellipse cx="49" cy="92" rx="10" ry="26" fill="#d28736" transform="rotate(-40 49 92)"/>
+    <ellipse cx="72" cy="69" rx="11" ry="25" fill="#7f3e2f" transform="rotate(-36 72 69)"/>
+    <ellipse cx="95" cy="46" rx="10" ry="23" fill="#e0aa45" transform="rotate(-29 95 46)"/>
+    <ellipse cx="57" cy="119" rx="9" ry="22" fill="#bd5a35" transform="rotate(50 57 119)"/>
+    <ellipse cx="83" cy="100" rx="9" ry="22" fill="#e0a145" transform="rotate(49 83 100)"/>
+    <ellipse cx="110" cy="78" rx="10" ry="23" fill="#8e2435" transform="rotate(45 110 78)"/>
+    <circle cx="128" cy="63" r="9" fill="#9c1f35"/><circle cx="142" cy="69" r="8" fill="#b83c50"/><circle cx="137" cy="52" r="7" fill="#7a1628"/>
+    <circle cx="150" cy="82" r="6" fill="#b27734"/><circle cx="158" cy="72" r="5" fill="#8d5a28"/>
+    <g transform="translate(120 102)">
+      <circle cx="0" cy="0" r="25" fill="#741525"/>
+      <path d="M-18 1 C-10 -16 8 -17 18 -3 C13 10 -3 18 -18 1Z" fill="#a72c42"/>
+      <path d="M-11 -7 C-2 -17 13 -12 15 1 C7 11 -8 10 -11 -7Z" fill="#c35161"/>
+      <path d="M-4 -4 C4 -10 11 -4 9 4 C4 9 -5 7 -4 -4Z" fill="#6d1121"/>
+    </g>
+    <g fill="#d9b27b" opacity=".9">
+      <circle cx="103" cy="120" r="4"/><circle cx="112" cy="128" r="4"/><circle cx="120" cy="120" r="4"/><circle cx="128" cy="132" r="4"/>
+    </g>
   </svg>`;
 }
 function singleSlotMarkup(p,size,type){
@@ -184,10 +205,8 @@ function combinedSlotMarkup(items,size,type,title,priceLabel){
 }
 function selectedProducts(){ return products.filter(p=>p.onPoster).slice(0,13); }
 function posterBackgroundStyle(){
-  if(settings.backgroundMode==='custom' && assets.background){
-    return `background-image:linear-gradient(rgba(255,250,240,.12),rgba(255,250,240,.12)),url('${assets.background}')`;
-  }
-  return '';
+  const bg = (settings.backgroundMode==='custom' && assets.background) ? assets.background : BUILTIN_POSTER_BG;
+  return `background-image:url('${bg}');background-size:cover;background-position:center;background-repeat:no-repeat;`;
 }
 function renderPoster(){
   settings.posterTitle=$('#posterTitle').value;
@@ -200,8 +219,7 @@ function renderPoster(){
   const topB=combinedSlotMarkup([items[2],items[3]],'small','top','SZÍV ALAKÚ SÍRDÍSZEK', `${items[2]?.price || '1 600 Ft'} / ${items[3]?.price || '1 800 Ft'}`);
   const midA=combinedSlotMarkup([items[4],items[5]],'big','mid','GALAMBOS ÉS VIRÁGOS SZÍV ALAKÚ SÍRDÍSZEK', items[4]?.price || '2 300 Ft');
   const midB=combinedSlotMarkup([items[6],items[7]],'big','mid','ANGYALKÁS SÍRDÍSZEK', items[6]?.price || '2 500 Ft');
-  host.innerHTML=`<section class="poster ${settings.backgroundMode==='custom' && assets.background ? 'custom-bg' : ''}" style="${posterBackgroundStyle()}">
-    ${cornerSvg('tl')}${cornerSvg('tr')}${cornerSvg('bl')}${cornerSvg('br')}
+  host.innerHTML=`<section class="poster" style="${posterBackgroundStyle()}">
     <header class="poster-head">
       <div class="logo-disc">${logoMarkup()}</div>
       <div class="poster-title">
@@ -209,7 +227,7 @@ function renderPoster(){
         <h2>${esc(((settings.posterTitle||'Mindenszenteki sírdíszek').split(' ').slice(1).join(' ')) || 'SÍRDÍSZEK')}</h2>
         <div class="tag">♥ ${esc(settings.posterSubtitle)} ♥</div>
       </div>
-      <div class="candle-wrap"><div class="candle"></div></div>
+      <div aria-hidden="true"></div>
     </header>
     <div class="grid top-grid">${topA}${topB}</div>
     <div class="grid mid-grid">${midA}${midB}</div>
@@ -217,7 +235,7 @@ function renderPoster(){
       ${singleSlotMarkup(items[8],'bottom','bottom')}
       ${singleSlotMarkup(items[9],'bottom','bottom')}
       ${singleSlotMarkup(items[10],'bottom','bottom')}
-    </div>
+    </div><div class="roof"></div><div class="body"></div><div class="light"></div></div>
     <footer class="poster-footer">
       <strong>${esc(settings.brandName)}</strong>
       <div class="contacts">Facebook: ${esc(settings.facebook)} &nbsp; • &nbsp; Instagram: ${esc(settings.instagram)} &nbsp; • &nbsp; ${esc(settings.orderText)}</div>
@@ -564,7 +582,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:5,settings,assets,products};
+  const payload={version:"5.2",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -719,3 +737,6 @@ window.addEventListener('resize',()=>setTimeout(fitPreviews,100));
   await refresh();
   setTimeout(fitPreviews,120);
 })();
+
+const __runtimeStatus=document.getElementById('runtimeStatus');
+if(__runtimeStatus){__runtimeStatus.textContent='Rendszer: OK';__runtimeStatus.classList.add('ok');}
