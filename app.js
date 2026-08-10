@@ -171,10 +171,10 @@ function getSmartImageRecommendation(width,height,targetKind='generic'){
   let suggested='cover';
 
   if(targetKind==='catalog'){
-    if(ar>1.16){
+    if(ar>1.08){
       suggested='contain';
       recommendation='Széles vagy kollázs kép – a katalógusban a „Teljes kép” ajánlott.';
-    }else if(ar<0.90){
+    }else if(ar<0.96){
       suggested='contain';
       recommendation='Álló jellegű kép – a katalógusban a „Teljes kép” ajánlott.';
     }else{
@@ -185,10 +185,10 @@ function getSmartImageRecommendation(width,height,targetKind='generic'){
   }
 
   if(targetKind==='generic'){
-    if(ar>1.12){
+    if(ar>1.06){
       suggested='contain';
       recommendation='Széles vagy kollázs kép – a plakáton a „Teljes kép” ajánlott.';
-    }else if(ar<0.92){
+    }else if(ar<0.96){
       suggested='contain';
       recommendation='Álló jellegű kép – a plakáton a „Teljes kép” ajánlott.';
     }else{
@@ -308,8 +308,28 @@ async function loadAssets(){
   assets={logo:'',background:''};
   rows.forEach(r=>assets[r.key]=r.value);
 }
+
+async function migrateLegacyFrameModes(){
+  let changed=false;
+  for(const p of products){
+    const untouched = (p.scale ?? 100) === 100 && (p.offsetX ?? 0) === 0 && (p.offsetY ?? 0) === 0;
+    if(!untouched || !p.imageWidth || !p.imageHeight) continue;
+    const smart=getSmartImageRecommendation(p.imageWidth,p.imageHeight,'generic');
+    if((p.frameMode==='cover' || !p.frameMode) && smart.suggested==='contain'){
+      p.frameMode='auto';
+      changed=true;
+      await dbPut(PRODUCT_STORE,p);
+    }
+  }
+  return changed;
+}
+
 async function refresh(){
   products=(await dbGetAll(PRODUCT_STORE)).map(normProduct).sort((a,b)=>(a.order??999)-(b.order??999)||a.id-b.id);
+  const migrated=await migrateLegacyFrameModes();
+  if(migrated){
+    products=(await dbGetAll(PRODUCT_STORE)).map(normProduct).sort((a,b)=>(a.order??999)-(b.order??999)||a.id-b.id);
+  }
   await loadAssets();
   renderAll();
 }
@@ -489,7 +509,7 @@ function renderPosterUi(){
     });
   };
   toolbar.querySelector('[data-act="replace"]').onclick=()=>{ const inp=$('#replaceImageInput'); if(inp){ inp.value=''; inp.click(); } };
-  toolbar.querySelector('[data-act="reset"]').onclick=async()=>{ pushHistory(); p.frameMode='cover'; p.scale=100; p.offsetX=0; p.offsetY=0; await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
+  toolbar.querySelector('[data-act="reset"]').onclick=async()=>{ pushHistory(); p.frameMode='auto'; p.scale=100; p.offsetX=0; p.offsetY=0; await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
   updateHistoryButtons();
 }
 
@@ -1228,7 +1248,7 @@ $('#resetSelectedBtn').onclick=async()=>{
   pushHistory();
   const p=products.find(x=>x.id===selectedId);
   if(!p) return;
-  p.frameMode='cover'; p.scale=100; p.offsetX=0; p.offsetY=0;
+  p.frameMode='auto'; p.scale=100; p.offsetX=0; p.offsetY=0;
   await dbPut(PRODUCT_STORE,p);
   renderAll();
 };
@@ -1547,7 +1567,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"7.11",settings,assets,products};
+  const payload={version:"7.12",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);

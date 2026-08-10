@@ -1566,3 +1566,48 @@ input[type="color"]{height:42px;padding:4px}
 .export-snapshot .poster-head::after{
   pointer-events:none;
 }
+
+
+/* v7.12 – logó és képarány finomítás */
+.logo-disc .logo-fallback,
+.catalog-logo-disc .logo-fallback{
+  padding:10px 10px 12px;
+  box-sizing:border-box;
+  width:100%;
+  height:100%;
+}
+.logo-disc .pm{
+  font-size:44px !important;
+  line-height:.9;
+}
+.logo-disc .brand{
+  font-size:12px !important;
+  letter-spacing:.18em;
+  margin-top:2px;
+}
+.logo-disc .small{
+  font-size:9px !important;
+  letter-spacing:.14em;
+}
+.catalog-logo-disc .pm{
+  font-size:20px !important;
+}
+.catalog-logo-disc .brand{
+  font-size:6.5px !important;
+  letter-spacing:.14em;
+}
+.catalog-logo-disc .small{
+  font-size:5.5px !important;
+  letter-spacing:.10em;
+}
+
+/* Biztonságosabb képelhelyezés kollázsokhoz és szélesebb képekhez */
+.poster .v7-media-cell.contain img,
+.catalog-photo.contain img{
+  max-width:calc(100% - 10px) !important;
+  max-height:calc(100% - 10px) !important;
+}
+.poster .v7-media-cell.cover img,
+.catalog-photo.cover img{
+  object-position:center center;
+}

@@ -30,3 +30,9 @@ A Tiszta előnézet / export során a kijelölés és a méretező fogópont nem
 - a szezonális háttérválasztás újra egyszerű legördülős lett
 - finomabb, áttetszőbb fejléc-háttér a cím mögött
 - biztonságosabb plakát-export klónozott exportnézettel, hogy a logó a letöltött PNG-n is megjelenjen
+
+
+## v7.12
+- logó fallback méret és belső tördelés finomítva, hogy a teljes felirat látszódjon
+- agresszívebb automatikus képarány-kezelés a széles/álló/kollázs képekre
+- régebbi, még „Kitöltés” módban ragadt, nem kézzel állított képek automatikus visszaállítása AUTO módra
