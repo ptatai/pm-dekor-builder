@@ -4,8 +4,8 @@ window.addEventListener('error', function(e){
   if(el){ el.textContent='Hiba: '+(e.message||'JavaScript hiba'); el.classList.add('bad'); }
 });
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const DB_NAME='pm-dekor-v52', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v52';
-let products=[], pendingImage='', selectedId=null, dragState=null;
+const DB_NAME='pm-dekor-v6', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v6';
+let products=[], pendingImage='', selectedId=null, dragState=null, undoStack=[], redoStack=[], previewMode=false;
 
 const defaults={
   brandName:'PM Dekor Melinda',
@@ -130,7 +130,136 @@ function renderAll(){
   renderPoster();
   renderCatalog();
   renderAssetPreviews();
+  updateHistoryButtons();
   setTimeout(fitPreviews,80);
+}
+
+
+function syncSettingsFromInputs(){
+  ['brandName','facebook','instagram','orderText','thanksText','accentColor','posterTitle','posterSubtitle','catalogTitle','backgroundMode'].forEach(id=>{
+    const el=$('#'+id);
+    if(el) settings[id] = el.value;
+  });
+}
+function deepClone(v){ return JSON.parse(JSON.stringify(v)); }
+function snapshotState(){
+  syncSettingsFromInputs();
+  return deepClone({products, settings, assets});
+}
+function updateHistoryButtons(){
+  const undoBtn=$('#undoBtn'), redoBtn=$('#redoBtn'), toggleBtn=$('#togglePreviewBtn');
+  if(undoBtn) undoBtn.disabled = undoStack.length===0;
+  if(redoBtn) redoBtn.disabled = redoStack.length===0;
+  if(toggleBtn){
+    toggleBtn.textContent = `Tiszta előnézet: ${previewMode ? 'BE' : 'KI'}`;
+    toggleBtn.classList.toggle('active', previewMode);
+  }
+  document.body.classList.toggle('clean-preview', previewMode);
+}
+function pushHistory(){
+  const snap=snapshotState();
+  const encoded=JSON.stringify(snap);
+  const last=undoStack.length ? JSON.stringify(undoStack[undoStack.length-1]) : null;
+  if(encoded===last) return;
+  undoStack.push(snap);
+  if(undoStack.length>40) undoStack.shift();
+  redoStack.length=0;
+  updateHistoryButtons();
+}
+async function applySnapshot(snapshot){
+  await dbClear(PRODUCT_STORE);
+  await dbClear(ASSET_STORE);
+  for(const product of (snapshot.products||[])){
+    const copy={...product};
+    delete copy.id;
+    await dbAdd(PRODUCT_STORE,copy);
+  }
+  if(snapshot.assets?.logo) await dbPut(ASSET_STORE,{key:'logo',value:snapshot.assets.logo});
+  if(snapshot.assets?.background) await dbPut(ASSET_STORE,{key:'background',value:snapshot.assets.background});
+  settings={...defaults,...(snapshot.settings||{})};
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+  selectedId=null;
+  loadSettingsUi();
+  await refresh();
+}
+async function undoAction(){
+  if(!undoStack.length) return;
+  const current=snapshotState();
+  const previous=undoStack.pop();
+  redoStack.push(current);
+  await applySnapshot(previous);
+  updateHistoryButtons();
+}
+async function redoAction(){
+  if(!redoStack.length) return;
+  const current=snapshotState();
+  const next=redoStack.pop();
+  undoStack.push(current);
+  await applySnapshot(next);
+  updateHistoryButtons();
+}
+function togglePreviewMode(){
+  previewMode=!previewMode;
+  updateHistoryButtons();
+  renderPosterUi();
+}
+function quickEditSetting(key){
+  const labels={
+    posterTitle:'Plakát cím',
+    posterSubtitle:'Plakát alcím',
+    brandName:'Márkanév',
+    thanksText:'Köszönet szöveg'
+  };
+  const current = (settings[key] ?? '');
+  const next = window.prompt(labels[key] || 'Szöveg', current);
+  if(next===null) return;
+  pushHistory();
+  settings[key]=next.trim();
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+  loadSettingsUi();
+  renderAll();
+}
+function bindPosterEditable(){
+  const host=$('#posterCanvas');
+  host.querySelectorAll('[data-setting-key]').forEach(el=>{
+    el.ondblclick=(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      quickEditSetting(el.dataset.settingKey);
+    };
+  });
+}
+function renderPosterUi(){
+  const host=$('#posterCanvas');
+  if(!host) return;
+  let toolbar=host.querySelector('#posterToolbar');
+  if(!toolbar){
+    toolbar=document.createElement('div');
+    toolbar.id='posterToolbar';
+    toolbar.className='poster-toolbar hidden';
+    host.appendChild(toolbar);
+  }
+  const p=products.find(x=>x.id===selectedId);
+  if(previewMode || !p){
+    toolbar.classList.add('hidden');
+    updateHistoryButtons();
+    return;
+  }
+  toolbar.classList.remove('hidden');
+  toolbar.innerHTML=`
+    <span class="toolbar-title">${esc(p.name)}</span>
+    <button class="tool-btn" type="button" data-act="zoomout">− Zoom</button>
+    <button class="tool-btn" type="button" data-act="zoomin">+ Zoom</button>
+    <button class="tool-btn" type="button" data-act="togglemode">${p.frameMode==='cover' ? 'Teljes kép' : 'Kitöltés'}</button>
+    <button class="tool-btn" type="button" data-act="replace">Csere</button>
+    <button class="tool-btn" type="button" data-act="reset">Reset</button>
+  `;
+  toolbar.querySelector('[data-act="zoomout"]').onclick=async()=>{ pushHistory(); p.scale=Math.max(50,(p.scale||100)-10); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
+  toolbar.querySelector('[data-act="zoomin"]').onclick=async()=>{ pushHistory(); p.scale=Math.min(220,(p.scale||100)+10); await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
+  toolbar.querySelector('[data-act="togglemode"]').onclick=async()=>{ pushHistory(); p.frameMode=p.frameMode==='cover' ? 'contain' : 'cover'; await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
+  toolbar.querySelector('[data-act="replace"]').onclick=()=>{ const inp=$('#replaceImageInput'); if(inp){ inp.value=''; inp.click(); } };
+  toolbar.querySelector('[data-act="reset"]').onclick=async()=>{ pushHistory(); p.frameMode='cover'; p.scale=100; p.offsetX=0; p.offsetY=0; await dbPut(PRODUCT_STORE,p); renderAll(); selectedId=p.id; };
+  updateHistoryButtons();
 }
 
 function logoMarkup(){
@@ -222,10 +351,10 @@ function renderPoster(){
   host.innerHTML=`<section class="poster" style="${posterBackgroundStyle()}">
     <header class="poster-head">
       <div class="logo-disc">${logoMarkup()}</div>
-      <div class="poster-title">
+      <div class="poster-title poster-editable" data-setting-key="posterTitle">
         <div class="script">${esc((settings.posterTitle||'Mindenszenteki sírdíszek').split(' ')[0] || 'Mindenszenteki')}</div>
         <h2>${esc(((settings.posterTitle||'Mindenszenteki sírdíszek').split(' ').slice(1).join(' ')) || 'SÍRDÍSZEK')}</h2>
-        <div class="tag">♥ ${esc(settings.posterSubtitle)} ♥</div>
+        <div class="tag poster-editable" data-setting-key="posterSubtitle">♥ ${esc(settings.posterSubtitle)} ♥</div>
       </div>
       <div aria-hidden="true"></div>
     </header>
@@ -235,16 +364,18 @@ function renderPoster(){
       ${singleSlotMarkup(items[8],'bottom','bottom')}
       ${singleSlotMarkup(items[9],'bottom','bottom')}
       ${singleSlotMarkup(items[10],'bottom','bottom')}
-    </div><div class="roof"></div><div class="body"></div><div class="light"></div></div>
+    </div>
     <footer class="poster-footer">
-      <strong>${esc(settings.brandName)}</strong>
+      <strong class="poster-editable" data-setting-key="brandName">${esc(settings.brandName)}</strong>
       <div class="contacts">Facebook: ${esc(settings.facebook)} &nbsp; • &nbsp; Instagram: ${esc(settings.instagram)} &nbsp; • &nbsp; ${esc(settings.orderText)}</div>
-      <div class="thanks">♥ ${esc(settings.thanksText)} ♥</div>
+      <div class="thanks poster-editable" data-setting-key="thanksText">♥ ${esc(settings.thanksText)} ♥</div>
     </footer>
   </section>`;
   applyMediaTransforms(host);
   attachPosterDrag(host);
+  bindPosterEditable();
   updateSelectedControls();
+  renderPosterUi();
 }
 function applyMediaTransforms(scope=document){
   scope.querySelectorAll('.media-frame[data-product-id]').forEach(frame=>{
@@ -257,6 +388,12 @@ function applyMediaTransforms(scope=document){
 }
 function attachPosterDrag(scope){
   scope.querySelectorAll('.media-frame[data-product-id]').forEach(frame=>{
+    frame.onclick=()=>{
+      selectedId=Number(frame.dataset.productId);
+      updateSelectedControls();
+      applyMediaTransforms(scope);
+      renderPosterUi();
+    };
     frame.onpointerdown=e=>{
       if(e.button!==undefined && e.button!==0) return;
       const id=Number(frame.dataset.productId);
@@ -265,7 +402,7 @@ function attachPosterDrag(scope){
       selectedId=id;
       updateSelectedControls();
       applyMediaTransforms(scope);
-      dragState={id,startX:e.clientX,startY:e.clientY,offsetX:p.offsetX||0,offsetY:p.offsetY||0};
+      dragState={id,startX:e.clientX,startY:e.clientY,offsetX:p.offsetX||0,offsetY:p.offsetY||0,changed:false};
       frame.setPointerCapture?.(e.pointerId);
       e.preventDefault();
     };
@@ -273,20 +410,44 @@ function attachPosterDrag(scope){
       if(!dragState || dragState.id!==Number(frame.dataset.productId)) return;
       const p=products.find(x=>x.id===dragState.id);
       if(!p) return;
+      if(!dragState.changed){ pushHistory(); dragState.changed=true; }
       p.offsetX=Math.round(dragState.offsetX + (e.clientX-dragState.startX));
       p.offsetY=Math.round(dragState.offsetY + (e.clientY-dragState.startY));
       applyMediaTransforms(scope);
       syncSelectedControlValues(p);
+      renderPosterUi();
     };
     frame.onpointerup=async()=>{
       if(!dragState) return;
       const p=products.find(x=>x.id===dragState.id);
+      const changed=dragState.changed;
       dragState=null;
-      if(p){
+      if(p && changed){
         await dbPut(PRODUCT_STORE,p);
         renderProducts();
         renderCatalog();
       }
+    };
+    frame.ondragover=e=>{
+      if(e.dataTransfer?.files?.length){
+        e.preventDefault();
+        frame.classList.add('drop-target');
+      }
+    };
+    frame.ondragleave=()=>frame.classList.remove('drop-target');
+    frame.ondrop=async e=>{
+      e.preventDefault();
+      frame.classList.remove('drop-target');
+      const file=[...(e.dataTransfer?.files||[])].find(f=>f.type.startsWith('image/'));
+      if(!file) return;
+      const id=Number(frame.dataset.productId);
+      const p=products.find(x=>x.id===id);
+      if(!p) return;
+      pushHistory();
+      p.image=await fileToData(file);
+      selectedId=id;
+      await dbPut(PRODUCT_STORE,p);
+      renderAll();
     };
   });
 }
@@ -298,6 +459,7 @@ function updateSelectedControls(){
     $('#selectedScaleValue').textContent='100%';
     $('#selectedXValue').textContent='0';
     $('#selectedYValue').textContent='0';
+    renderPosterUi();
     return;
   }
   $('#selectedProductText').textContent=p.name;
@@ -306,6 +468,7 @@ function updateSelectedControls(){
   $('#selectedX').value=p.offsetX;
   $('#selectedY').value=p.offsetY;
   syncSelectedControlValues(p);
+  renderPosterUi();
 }
 function syncSelectedControlValues(p){
   $('#selectedScaleValue').textContent=p.scale+'%';
@@ -322,8 +485,9 @@ async function changeSelectedProduct(){
   await dbPut(PRODUCT_STORE,p);
   renderAll();
 }
-['selectedFrameMode','selectedScale','selectedX','selectedY'].forEach(id=>$('#'+id).addEventListener('input',changeSelectedProduct));
+['selectedFrameMode','selectedScale','selectedX','selectedY'].forEach(id=>{ $('#'+id).addEventListener('pointerdown', ()=>{ if(selectedId) pushHistory(); }, {passive:true}); $('#'+id).addEventListener('input',changeSelectedProduct); });
 $('#resetSelectedBtn').onclick=async()=>{
+  pushHistory();
   const p=products.find(x=>x.id===selectedId);
   if(!p) return;
   p.frameMode='cover'; p.scale=100; p.offsetX=0; p.offsetY=0;
@@ -405,14 +569,15 @@ function renderProducts(){
     cb.checked=p.onPoster;
     cb.onchange=async()=>{ p.onPoster=cb.checked; await dbPut(PRODUCT_STORE,p); renderPoster(); };
     node.querySelector('.delete').onclick=async()=>{
+      pushHistory();
       if(!confirm(`Törlöd ezt a terméket?\n${p.name}`)) return;
       await dbDelete(PRODUCT_STORE,p.id);
       if(selectedId===p.id) selectedId=null;
       await refresh();
     };
     node.querySelector('.edit').onclick=()=>openEdit(p);
-    node.querySelector('.up').onclick=()=>moveProduct(p.id,-1);
-    node.querySelector('.down').onclick=()=>moveProduct(p.id,1);
+    node.querySelector('.up').onclick=()=>{ pushHistory(); moveProduct(p.id,-1); };
+    node.querySelector('.down').onclick=()=>{ pushHistory(); moveProduct(p.id,1); };
     list.appendChild(node);
   });
   applyMediaTransforms(list);
@@ -464,6 +629,7 @@ $('#editImage').onchange=async e=>{
   $('#editPreview img').src=await fileToData(file);
 };
 $('#editForm').onsubmit=async e=>{
+  pushHistory();
   e.preventDefault();
   const p=products.find(x=>x.id===Number($('#editId').value));
   if(!p) return;
@@ -497,6 +663,7 @@ $('#imageInput').onchange=async e=>{
   $('#thumbPreview').innerHTML=`<img src="${pendingImage}" alt="">`;
 };
 $('#productForm').onsubmit=async e=>{
+  pushHistory();
   e.preventDefault();
   if(!pendingImage) return alert('Válassz képet.');
   await dbAdd(PRODUCT_STORE,normProduct({
@@ -530,8 +697,10 @@ function loadSettingsUi(){
   });
   setAccent(settings.accentColor);
   updateAddLabels();
+  updateHistoryButtons();
 }
 $('#saveSettingsBtn').onclick=()=>{
+  pushHistory();
   settings.brandName=$('#brandName').value.trim() || defaults.brandName;
   settings.facebook=$('#facebook').value.trim();
   settings.instagram=$('#instagram').value.trim();
@@ -550,6 +719,7 @@ $('#saveSettingsBtn').onclick=()=>{
 $('#accentColor').oninput=e=>setAccent(e.target.value);
 
 $('#logoInput').onchange=async e=>{
+  pushHistory();
   const file=e.target.files[0];
   if(!file) return;
   assets.logo=await fileToData(file,1000,.9);
@@ -557,11 +727,13 @@ $('#logoInput').onchange=async e=>{
   renderAll();
 };
 $('#removeLogoBtn').onclick=async()=>{
+  pushHistory();
   assets.logo='';
   await dbDelete(ASSET_STORE,'logo');
   renderAll();
 };
 $('#backgroundInput').onchange=async e=>{
+  pushHistory();
   const file=e.target.files[0];
   if(!file) return;
   assets.background=await fileToData(file,2400,.88);
@@ -571,6 +743,7 @@ $('#backgroundInput').onchange=async e=>{
   renderAll();
 };
 $('#removeBackgroundBtn').onclick=async()=>{
+  pushHistory();
   assets.background='';
   settings.backgroundMode='template';
   $('#backgroundMode').value='template';
@@ -582,7 +755,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"5.2",settings,assets,products};
+  const payload={version:"6.0",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -615,6 +788,7 @@ $('#restoreInput').onchange=async e=>{
   }
 };
 $('#clearBtn').onclick=async()=>{
+  pushHistory();
   if(!confirm('Biztosan törlöd az összes terméket és feltöltött logót/hátteret?')) return;
   await dbClear(PRODUCT_STORE);
   await dbClear(ASSET_STORE);
@@ -635,6 +809,22 @@ $$('.tab').forEach(tab=>{
     setTimeout(fitPreviews,60);
   };
 });
+
+
+$('#undoBtn').onclick=undoAction;
+$('#redoBtn').onclick=redoAction;
+$('#togglePreviewBtn').onclick=togglePreviewMode;
+$('#replaceImageInput').onchange=async e=>{
+  const file=e.target.files[0];
+  if(!file || !selectedId) return;
+  const p=products.find(x=>x.id===selectedId);
+  if(!p) return;
+  pushHistory();
+  p.image=await fileToData(file);
+  await dbPut(PRODUCT_STORE,p);
+  renderAll();
+  e.target.value='';
+};
 
 $('#exportPosterBtn').onclick=async()=>{
   const btn=$('#exportPosterBtn');
@@ -688,6 +878,7 @@ function demoCanvas(label,w,h,c1,c2){
   return canvas.toDataURL('image/jpeg',.88);
 }
 $('#demoBtn').onclick=async()=>{
+  pushHistory();
   if(products.length && !confirm('A mintaadatok hozzáadódnak a meglévőkhöz. Folytatod?')) return;
   const demo=[
     ['Kis teamécseses','600 Ft','SIMA TEAMÉCSESSEL',900,1200,'contain','#d8c4a5','#87674e'],

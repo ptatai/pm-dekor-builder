@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#6d1720">
-  <title>PM Dekor – Plakát és katalógus szerkesztő v5.3</title>
+  <title>PM Dekor – Plakát és katalógus szerkesztő v6</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div>
     <div class="eyebrow">PM DEKOR</div>
-    <h1>Plakát és katalógus szerkesztő <span class="version">v5.3</span></h1>
+    <h1>Plakát és katalógus szerkesztő <span class="version">v6</span></h1>
   </div>
   <div class="runtime-status" id="runtimeStatus">JavaScript indul…</div><div class="header-actions">
     <button class="btn soft" id="demoBtn">Mintaadatok</button>
@@ -134,11 +134,23 @@
           </p>
         </div>
 
+        
+        <div class="mini-box">
+          <h3>V6 gyors szerkesztés</h3>
+          <div class="quick-actions">
+            <button class="btn tiny" type="button" id="undoBtn">↶ Vissza</button>
+            <button class="btn tiny" type="button" id="redoBtn">↷ Előre</button>
+            <button class="btn tiny" type="button" id="togglePreviewBtn">Tiszta előnézet: KI</button>
+          </div>
+          <p class="note">Duplakatt a fő szövegeken a gyors szerkesztéshez. Húzz egy képfájlt közvetlenül a plakáton lévő képhelyre, ha gyorsan cserélni szeretnéd.</p>
+        </div>
+
         <button class="btn primary" id="exportPosterBtn">Plakát letöltése PNG-ben</button>
+
       </aside>
 
       <div class="preview-scroll">
-        <div id="posterCanvas"></div>
+        <div id="posterCanvas"></div><input id="replaceImageInput" type="file" accept="image/*" hidden>
       </div>
     </div>
   </section>
