@@ -1075,3 +1075,206 @@ input[type="color"]{height:42px;padding:4px}
 .poster .v7-mini-head{
   z-index:3;
 }
+
+
+/* ==========================================================
+   V7.6 – finom vizuális javítások
+   - no-stretch / biztonságosabb AUTO
+   - fejléc olvashatóság
+   - stabilabb katalógus
+   ========================================================== */
+
+/* Fejléc: a jobb felső dekor ne nyomja el a címet */
+.poster-head{
+  position:relative;
+  isolation:isolate;
+}
+.poster-head::before{
+  content:"";
+  position:absolute;
+  left:228px;
+  right:92px;
+  top:4px;
+  height:118px;
+  border-radius:26px;
+  background:linear-gradient(180deg, rgba(255,250,243,.94), rgba(255,248,239,.72));
+  box-shadow:0 8px 24px rgba(126,86,39,.05);
+  z-index:0;
+}
+.poster-head > *{
+  position:relative;
+  z-index:1;
+}
+.poster-title{
+  padding:8px 18px 10px;
+  border-radius:18px;
+}
+.poster-title .script,
+.poster-title h2,
+.poster-title .tag{
+  text-shadow:0 1px 0 rgba(255,255,255,.72);
+}
+.poster-title h2{
+  line-height:0.95;
+}
+
+/* Poszter képek: ne torzuljanak, egységesebb keretviselkedés */
+.poster .v7-block-media{
+  align-items:stretch;
+}
+.poster .v7-media-cell{
+  background:rgba(255,251,245,.16);
+}
+.poster .v7-media-cell.contain{
+  background:rgba(255,248,241,.78);
+}
+.poster .v7-media-cell.contain img{
+  max-width:calc(100% - 16px);
+  max-height:calc(100% - 16px);
+}
+.poster .v7-media-cell.cover img{
+  width:100%;
+  height:100%;
+}
+.poster .v7-block-media.slots-1 .v7-media-cell{
+  min-height:250px;
+}
+.poster .v7-block-media.slots-2 .v7-media-cell{
+  min-height:246px;
+}
+.poster .v7-block-media.slots-3 .v7-media-cell{
+  min-height:228px;
+}
+.poster .v7-block[style*="flex:2"] .v7-block-media.slots-1 .v7-media-cell,
+.poster .v7-block[style*="flex:3"] .v7-block-media.slots-1 .v7-media-cell,
+.poster .v7-block[style*="flex:4"] .v7-block-media.slots-1 .v7-media-cell{
+  min-height:274px;
+}
+.poster .v7-mini-title{
+  max-width:96%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* Katalógus: stabil kártyák, fix képtartó, egységes magasság */
+.catalog-grid{
+  align-items:stretch;
+  grid-auto-rows:1fr;
+}
+.catalog-card{
+  display:grid;
+  grid-template-rows:250px 1fr;
+  min-height:446px;
+}
+.catalog-photo{
+  height:auto;
+  min-height:250px;
+  background:#fcf7ee;
+}
+.catalog-photo.contain{
+  background:#fbf6ef;
+}
+.catalog-photo.contain img{
+  max-width:calc(100% - 18px);
+  max-height:calc(100% - 18px);
+}
+.catalog-photo.cover img{
+  width:100%;
+  height:100%;
+}
+.catalog-body{
+  display:grid;
+  grid-template-rows:auto auto minmax(42px,1fr) auto;
+  gap:6px;
+}
+.catalog-body h3{
+  margin:4px 0 0;
+  line-height:1.18;
+  min-height:42px;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.catalog-body p{
+  margin:0;
+  min-height:48px;
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.catalog-price{
+  align-self:end;
+}
+
+/* Mobilon is maradjon olvasható a fejléc */
+@media(max-width:980px){
+  .poster-head::before{
+    left:188px;
+    right:54px;
+    height:108px;
+  }
+}
+
+
+/* ==========================================================
+   V7.7 – plakát alcím + biztosabb logó export
+   ========================================================== */
+
+.catalog-brand-group{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
+.catalog-logo-disc{
+  width:58px;
+  height:58px;
+  flex:0 0 58px;
+  border:1px solid #b07a34;
+  border-radius:50%;
+  background:#fffaf4;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  box-shadow:inset 0 0 0 3px rgba(255,251,243,.96);
+}
+.catalog-logo-disc img{
+  max-width:86%;
+  max-height:86%;
+  object-fit:contain;
+}
+.catalog-logo-disc .pm{
+  font-style:italic;
+  color:var(--accent);
+  font-size:25px;
+  line-height:.85;
+  text-align:center;
+}
+.catalog-logo-disc .brand{
+  font-size:7px;
+  line-height:1;
+  letter-spacing:.10em;
+  text-align:center;
+  color:#4b3a30;
+}
+.catalog-logo-disc .small{
+  font-size:6px;
+  line-height:1;
+  letter-spacing:.08em;
+  text-align:center;
+  color:#4b3a30;
+}
+.catalog-head .catalog-brand-group .brand{
+  font-size:18px;
+}
+.catalog-head .catalog-brand-group h2{
+  margin-top:2px;
+}
+
+/* A plakát mini alcíme rövid, egyértelmű termékadat legyen. */
+.poster .v7-mini-title{
+  font-weight:800;
+}

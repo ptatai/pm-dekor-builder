@@ -1,16 +1,31 @@
-# PM Dekor szerkesztő v7.5
+# PM Dekor szerkesztő v7.7
 
-## Fő javítás: termékcsere → plakát előnézet
+## Új termékadat: Plakát alcím
+A termék most külön kezeli:
+- Terméknév
+- Ár
+- Kategória
+- **Plakát alcím**
+- Leírás
 
-A V7.4-ben maradt egy állapotkezelési hiba:
-az `ensurePosterRows()` minden rendernél új objektumokat hozott létre.
-Emiatt bizonyos szerkesztési sorrend után a lenyíló mezők még egy régi blokkobjektumot módosítottak,
-miközben a plakát már egy új példányból renderelt.
+### Plakát
+A mini termékfelirat sorrendje:
+1. Plakát alcím
+2. ha nincs, Kategória
+3. ha az sincs, Terméknév
 
-### V7.5 javítás
-- a sorszerkezet normalizálása most **helyben történik**, nem cseréli le a blokkokat;
-- termék kiválasztásakor a teljes szerkesztő + plakát újrarenderelődik;
-- cím, ár, blokktípus és sorigazítás után is teljes állapotszinkron történik;
-- a kiválasztott termék képének láthatóságára külön CSS biztosíték került.
+A hosszabb leírás nem zsúfolja a plakátot.
 
-A böngészős adatbázis neve nem változott, így a meglévő termékek továbbra is megmaradnak.
+### Katalógus
+A katalógus továbbra is megjeleníti:
+- kategóriát
+- terméknevet
+- leírást
+- árat
+
+## Logó javítás
+- a katalógus fejlécébe is bekerült a dinamikus logó;
+- export előtt a program megvárja a képek és betűk betöltődését;
+- ez csökkenti annak esélyét, hogy a logó vagy egy termékkép lemaradjon a PNG/PDF exportból.
+
+A meglévő termékek tovább működnek; az új `Plakát alcím` mező náluk kezdetben üres.

@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#6d1720">
-  <title>PM Dekor – Plakát és katalógus szerkesztő v7.5</title>
+  <title>PM Dekor – Plakát és katalógus szerkesztő v7.7</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div>
     <div class="eyebrow">PM DEKOR</div>
-    <h1>Plakát és katalógus szerkesztő <span class="version">v7.5</span></h1>
+    <h1>Plakát és katalógus szerkesztő <span class="version">v7.7</span></h1>
   </div>
   <div class="runtime-status" id="runtimeStatus">JavaScript indul…</div><div class="header-actions">
     <button class="btn soft" id="demoBtn">Mintaadatok</button>
@@ -40,7 +40,8 @@
           <label>Terméknév<input id="nameInput" required placeholder="Pl. Angyalkás sírdísz"></label>
           <label>Ár<input id="priceInput" required placeholder="Pl. 2 500 Ft"></label>
           <label>Kategória<input id="categoryInput" placeholder="Pl. ANGYALKÁS"></label>
-          <label>Rövid leírás<textarea id="descInput" rows="3" placeholder="Pl. Fehér virágokkal, kézzel készítve"></textarea></label>
+          <label>Plakát alcím<input id="posterLabelInput" maxlength="42" placeholder="Pl. LED mécsessel"></label>
+          <label>Rövid leírás<textarea id="descInput" rows="3" placeholder="A katalógusban megjelenő rövid leírás"></textarea></label>
           <label class="check"><input id="posterInput" type="checkbox" checked><span>Kerüljön a plakátra</span></label>
 
           <div class="mini-box">
@@ -290,6 +291,7 @@
       <label>Terméknév<input id="editName" required></label>
       <label>Ár<input id="editPrice" required></label>
       <label>Kategória<input id="editCategory"></label>
+      <label>Plakát alcím<input id="editPosterLabel" maxlength="42" placeholder="Pl. LED mécsessel"></label>
       <label>Leírás<textarea id="editDesc" rows="3"></textarea></label>
       <label class="check"><input id="editPoster" type="checkbox"><span>Kerüljön a plakátra</span></label>
       <label>Megjelenítés

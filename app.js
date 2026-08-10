@@ -108,7 +108,7 @@ async function dbClear(store){
 }
 
 function normProduct(p){
-  return {category:'',description:'',onPoster:true,frameMode:'auto',scale:100,offsetX:0,offsetY:0,order:999,imageWidth:null,imageHeight:null,...p};
+  return {category:'',description:'',posterLabel:'',onPoster:true,frameMode:'auto',scale:100,offsetX:0,offsetY:0,order:999,imageWidth:null,imageHeight:null,...p};
 }
 function esc(s=''){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
 function setAccent(hex){
@@ -162,17 +162,58 @@ function getProductSlotKind(id){
   return 'generic';
 }
 function getTargetRatio(kind='generic'){
-  return {generic:1.15,small:0.99,big:0.77,bottom:1.01}[kind] || 1;
+  return {generic:1.02,catalog:1.18,small:0.99,big:0.77,bottom:1.01}[kind] || 1;
 }
 function getSmartImageRecommendation(width,height,targetKind='generic'){
   const ar=(width&&height)?width/height:1;
   const target=getTargetRatio(targetKind);
   let recommendation='Normál arányú kép';
   let suggested='cover';
-  if(ar>target*1.55){ suggested='contain'; recommendation='Nagyon széles kép – AUTO módban a „Teljes kép” ajánlott.'; }
-  else if(ar<target*0.72){ suggested='contain'; recommendation='Nagyon magas / álló kép – AUTO módban a „Teljes kép” ajánlott.'; }
-  else if(ar>1.85){ suggested='contain'; recommendation='Panorámás / kollázs jellegű kép – finomabb vágás javasolt.'; }
-  else if(ar<0.82){ suggested='contain'; recommendation='Álló jellegű kép – érdemes óvatosabban vágni.'; }
+
+  if(targetKind==='catalog'){
+    if(ar>1.28){
+      suggested='contain';
+      recommendation='Széles vagy kollázs kép – a katalógusban a „Teljes kép” ajánlott.';
+    }else if(ar<0.86){
+      suggested='contain';
+      recommendation='Álló jellegű kép – a katalógusban a „Teljes kép” ajánlott.';
+    }else{
+      suggested='cover';
+      recommendation='Jól illeszkedő katalógusfotó.';
+    }
+    return {aspect:ar,suggested,recommendation};
+  }
+
+  if(targetKind==='generic'){
+    if(ar>1.25){
+      suggested='contain';
+      recommendation='Széles vagy kollázs kép – AUTO módban a teljes kép megjelenítés ajánlott.';
+    }else if(ar<0.88){
+      suggested='contain';
+      recommendation='Álló jellegű kép – AUTO módban a teljes kép megjelenítés ajánlott.';
+    }else if(ar>1.12 && ar<1.25){
+      suggested='contain';
+      recommendation='Enyhén széles kép – a plakáton finomabban mutat teljes képpel.';
+    }else{
+      suggested='cover';
+      recommendation='Normál termékfotó – jól működik kitöltéssel.';
+    }
+    return {aspect:ar,suggested,recommendation};
+  }
+
+  if(ar>target*1.55){
+    suggested='contain';
+    recommendation='Nagyon széles kép – AUTO módban a „Teljes kép” ajánlott.';
+  }else if(ar<target*0.72){
+    suggested='contain';
+    recommendation='Nagyon magas / álló kép – AUTO módban a „Teljes kép” ajánlott.';
+  }else if(ar>1.85){
+    suggested='contain';
+    recommendation='Panorámás / kollázs jellegű kép – finomabb vágás javasolt.';
+  }else if(ar<0.82){
+    suggested='contain';
+    recommendation='Álló jellegű kép – érdemes óvatosabban vágni.';
+  }
   return {aspect:ar,suggested,recommendation};
 }
 function getSmartDefaults(width,height,targetKind='generic'){
@@ -468,6 +509,12 @@ function logoMarkup(){
   if(assets.logo) return `<img src="${assets.logo}" alt="PM Dekor logó">`;
   return `<div><div class="pm">PM</div><div class="brand">DEKOR</div><div class="small">MELINDA</div></div>`;
 }
+
+function catalogLogoMarkup(){
+  if(settings.logoVisible===false) return '';
+  return `<div class="catalog-logo-disc">${logoMarkup()}</div>`;
+}
+
 function cornerSvg(cls){
   return `<svg class="corner ${cls}" viewBox="0 0 170 150" aria-hidden="true">
     <path d="M8 139 C38 107 61 82 112 18" fill="none" stroke="#755c39" stroke-width="3.2" stroke-linecap="round"/>
@@ -827,7 +874,7 @@ function automaticBlockTitle(block){
 }
 
 function productShortTitle(p){
-  return (p?.description || p?.name || '').trim().slice(0,42);
+  return (p?.posterLabel || p?.category || p?.name || '').trim().slice(0,42);
 }
 function productShortPrice(p){
   return (p?.price || '—').trim();
@@ -1068,16 +1115,19 @@ function renderCatalog(){
   $('#catalogCanvas').innerHTML=pages.map((page,index)=>`
     <section class="catalog-page">
       <header class="catalog-head">
-        <div>
-          <div class="brand">${esc(settings.brandName)}</div>
-          <h2>${esc(settings.catalogTitle)}</h2>
+        <div class="catalog-brand-group">
+          ${catalogLogoMarkup()}
+          <div>
+            <div class="brand">${esc(settings.brandName)}</div>
+            <h2>${esc(settings.catalogTitle)}</h2>
+          </div>
         </div>
         <div>${index+1}. oldal</div>
       </header>
       <div class="catalog-grid">
         ${page.length ? page.map(p=>`
           <article class="catalog-card">
-            <div class="catalog-photo media-frame ${mediaModeClass(p,'generic')}" data-product-id="${p.id}">
+            <div class="catalog-photo media-frame ${mediaModeClass(p,'catalog')}" data-product-id="${p.id}" data-slot-kind="catalog">
               <img src="${p.image}" alt="">
             </div>
             <div class="catalog-body">
@@ -1106,7 +1156,7 @@ function populateCategories(){
 
 function renderProducts(){
   const q=$('#searchInput').value.trim().toLowerCase();
-  const shown=products.filter(p=>!q || `${p.name} ${p.category} ${p.description}`.toLowerCase().includes(q));
+  const shown=products.filter(p=>!q || `${p.name} ${p.category} ${p.posterLabel||''} ${p.description}`.toLowerCase().includes(q));
   $('#productCount').textContent=`${products.length} termék`;
   const list=$('#productList');
   list.innerHTML='';
@@ -1123,7 +1173,7 @@ function renderProducts(){
     node.querySelector('.manage-name').textContent=p.name;
     node.querySelector('.manage-category').textContent=p.category || 'Nincs kategória';
     node.querySelector('.manage-price').textContent=p.price;
-    node.querySelector('.manage-desc').textContent=p.description || '';
+    node.querySelector('.manage-desc').textContent=[p.posterLabel ? `Plakát: ${p.posterLabel}` : '', p.description || ''].filter(Boolean).join(' · ');
     node.querySelector('.mode-badge').textContent=p.frameMode==='auto' ? 'AUTO' : (p.frameMode==='contain' ? 'Teljes kép' : 'Kitöltés');
     node.querySelector('.mode-badge').classList.toggle('auto', p.frameMode==='auto');
     node.querySelector('.zoom-badge').textContent=`Zoom ${p.scale}%`;
@@ -1166,6 +1216,7 @@ function openEdit(p){
   $('#editName').value=p.name;
   $('#editPrice').value=p.price;
   $('#editCategory').value=p.category;
+  $('#editPosterLabel').value=p.posterLabel || '';
   $('#editDesc').value=p.description;
   $('#editPoster').checked=p.onPoster;
   $('#editMode').value=p.frameMode;
@@ -1225,6 +1276,7 @@ $('#editForm').onsubmit=async e=>{
   p.name=$('#editName').value.trim();
   p.price=$('#editPrice').value.trim();
   p.category=$('#editCategory').value.trim();
+  p.posterLabel=$('#editPosterLabel').value.trim();
   p.description=$('#editDesc').value.trim();
   p.onPoster=$('#editPoster').checked;
   p.frameMode=$('#editMode').value;
@@ -1260,6 +1312,7 @@ $('#productForm').onsubmit=async e=>{
     name:$('#nameInput').value.trim(),
     price:$('#priceInput').value.trim(),
     category:$('#categoryInput').value.trim(),
+    posterLabel:$('#posterLabelInput').value.trim(),
     description:$('#descInput').value.trim(),
     onPoster:$('#posterInput').checked,
     image:pendingImage,
@@ -1354,7 +1407,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"7.5",settings,assets,products};
+  const payload={version:"7.7",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1496,11 +1549,30 @@ $$('.layout-preset').forEach(btn=>{
 });
 $('#autoAssignLayoutBtn').onclick=autoAssignLayoutProducts;
 
+
+async function waitForRenderableAssets(root){
+  if(document.fonts?.ready){
+    try{ await document.fonts.ready; }catch(_){}
+  }
+  const imgs=[...root.querySelectorAll('img')];
+  await Promise.all(imgs.map(img=>{
+    if(img.complete && img.naturalWidth>0) return Promise.resolve();
+    return new Promise(resolve=>{
+      const done=()=>resolve();
+      img.addEventListener('load',done,{once:true});
+      img.addEventListener('error',done,{once:true});
+      setTimeout(done,2500);
+    });
+  }));
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+}
+
 $('#exportPosterBtn').onclick=async()=>{
   const btn=$('#exportPosterBtn');
   btn.disabled=true; btn.textContent='Készül…';
   try{
     const el=$('#posterCanvas').firstElementChild;
+    await waitForRenderableAssets(el);
     const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#fffaf0'});
     const a=document.createElement('a');
     a.download='pm-dekor-plakat.png';
@@ -1518,6 +1590,7 @@ $('#exportCatalogBtn').onclick=async()=>{
     const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     const pages=$$('.catalog-page');
     for(let i=0;i<pages.length;i++){
+      await waitForRenderableAssets(pages[i]);
       const canvas=await html2canvas(pages[i],{scale:1.5,useCORS:true,backgroundColor:'#fffaf0'});
       if(i>0) pdf.addPage();
       pdf.addImage(canvas.toDataURL('image/jpeg',.92),'JPEG',0,0,210,297);
