@@ -1,18 +1,26 @@
-# PM Dekor szerkesztő v7.8
+# PM Dekor szerkesztő v7.9
 
-Gyors hibajavító kiadás.
+## Interaktív logó
+A logót most közvetlenül a plakáton lehet szerkeszteni.
 
-## Javítva
-1. **Szétcsúszó / rosszul illeszkedő kép**
-   - az AUTO képarány-logika szigorúbb lett;
-   - a széles és álló képek hamarabb váltanak `Teljes kép` megjelenítésre;
-   - a contain képek középre rendezve, torzítás nélkül jelennek meg.
+### Használat
+- kattints a logóra → kijelölés
+- húzd a logót → mozgatás
+- húzd a jobb alsó fogópontot → átméretezés
+- dupla kattintás → logócsere
+- kijelöléskor lebegő eszköztár jelenik meg:
+  - kisebb
+  - nagyobb
+  - alaphelyzet
+  - csere
+  - elrejtés
 
-2. **Logó nem látszik rendesen**
-   - a logó külső köre most stabil marad;
-   - a skálázás/eltolás csak a belső logótartalomra hat;
-   - a fallback PM DEKOR MELINDA felirat is kulturáltabban fér el.
+A Beállítások régi logócsúszkái is megmaradtak, és ugyanazt az állapotot módosítják.
 
-3. **Jobb oldali felirat nehezen olvasható**
-   - erősebb, de még finom fejléc-háttér került a cím mögé;
-   - a blokkcímek is kaptak egy halvány olvashatósági hátteret.
+A Tiszta előnézet / export során a kijelölés és a méretező fogópont nem jelenik meg.
+
+
+## v7.10 – szezonális hátterek
+- választható beépített háttér: őszi / húsvéti / karácsonyi
+- gyors háttérválasztó gombok és kis előnézetek
+- a saját háttér feltöltése továbbra is megmaradt

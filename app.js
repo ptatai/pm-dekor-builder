@@ -5,7 +5,7 @@ window.addEventListener('error', function(e){
 });
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const DB_NAME='pm-dekor-v63', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v63';
-let products=[], pendingImage='', pendingImageMeta=null, selectedId=null, dragState=null, undoStack=[], redoStack=[], previewMode=false, cropState=null;
+let products=[], pendingImage='', pendingImageMeta=null, selectedId=null, dragState=null, undoStack=[], redoStack=[], previewMode=false, cropState=null, logoSelected=false, logoDragState=null;
 
 const defaults={
   brandName:'PM Dekor Melinda',
@@ -52,7 +52,8 @@ const DEFAULT_POSTER_ROWS=[
 let settings={...defaults,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')};
 if(!Array.isArray(settings.posterRows)) settings.posterRows=JSON.parse(JSON.stringify(DEFAULT_POSTER_ROWS));
 let assets={logo:'',background:''};
-const BUILTIN_POSTER_BG = 'pm-dekor-background.png';
+const BUILTIN_BACKGROUNDS={template:'pm-dekor-background.png',easter:'pm-dekor-background-easter.png',christmas:'pm-dekor-background-christmas.png'};
+const BUILTIN_POSTER_BG = BUILTIN_BACKGROUNDS.template;
 
 function openDb(){
   return new Promise((resolve,reject)=>{
@@ -430,7 +431,32 @@ function renderPosterUi(){
     host.appendChild(toolbar);
   }
   const p=products.find(x=>x.id===selectedId);
-  if(previewMode || !p){
+  if(previewMode){
+    toolbar.classList.add('hidden');
+    updateHistoryButtons();
+    return;
+  }
+
+  if(logoSelected && settings.logoVisible!==false){
+    toolbar.classList.remove('hidden');
+    toolbar.innerHTML=`
+      <span class="toolbar-title">Logó</span>
+      <button class="tool-btn" type="button" data-logo-act="smaller">− Méret</button>
+      <button class="tool-btn" type="button" data-logo-act="larger">+ Méret</button>
+      <button class="tool-btn" type="button" data-logo-act="center">Alaphelyzet</button>
+      <button class="tool-btn" type="button" data-logo-act="replace">Csere</button>
+      <button class="tool-btn" type="button" data-logo-act="hide">Elrejtés</button>
+    `;
+    toolbar.querySelector('[data-logo-act="smaller"]').onclick=()=>{ pushHistory(); settings.logoScale=Math.max(55,Number(settings.logoScale||100)-10); saveLogoLayout(); renderPoster(); };
+    toolbar.querySelector('[data-logo-act="larger"]').onclick=()=>{ pushHistory(); settings.logoScale=Math.min(160,Number(settings.logoScale||100)+10); saveLogoLayout(); renderPoster(); };
+    toolbar.querySelector('[data-logo-act="center"]').onclick=()=>{ pushHistory(); settings.logoScale=100; settings.logoOffsetX=0; settings.logoOffsetY=0; saveLogoLayout(); renderPoster(); };
+    toolbar.querySelector('[data-logo-act="replace"]').onclick=()=>{ const inp=$('#logoInput'); if(inp){ inp.value=''; inp.click(); } };
+    toolbar.querySelector('[data-logo-act="hide"]').onclick=()=>{ pushHistory(); settings.logoVisible=false; logoSelected=false; saveLogoLayout(); renderPoster(); };
+    updateHistoryButtons();
+    return;
+  }
+
+  if(!p){
     toolbar.classList.add('hidden');
     updateHistoryButtons();
     return;
@@ -474,15 +500,17 @@ function syncLogoControlLabels(){
   if($('#logoOffsetY')) $('#logoOffsetYValue').textContent = `${$('#logoOffsetY').value} px`;
 }
 function logoDiscInlineStyle(){
-  const hasCustom = !!assets.logo;
-  const scale = hasCustom ? (Number(settings.logoScale ?? 100) / 100) : 1;
-  const x = hasCustom ? Number(settings.logoOffsetX ?? 0) : 0;
-  const y = hasCustom ? Number(settings.logoOffsetY ?? 0) : 0;
-  return `--logo-scale:${scale};--logo-x:${x}px;--logo-y:${y}px;`;
+  const scale = Number(settings.logoScale ?? 100) / 100;
+  const x = Number(settings.logoOffsetX ?? 0);
+  const y = Number(settings.logoOffsetY ?? 0);
+  return `transform:translate(${x}px, ${y}px) scale(${scale});`;
 }
 function logoSlotMarkup(){
   if(settings.logoVisible === false) return `<div class="logo-slot-empty" aria-hidden="true"></div>`;
-  return `<div class="logo-disc" style="${logoDiscInlineStyle()}">${logoMarkup()}</div>`;
+  return `<div class="logo-disc ${logoSelected?'logo-selected':''}" data-logo-interactive="true" style="${logoDiscInlineStyle()}">
+    ${logoMarkup()}
+    <button class="logo-resize-handle" type="button" aria-label="Logó átméretezése" title="Húzd a logó méretéhez"></button>
+  </div>`;
 }
 function applyLogoSettingsFromPanel(){
   if($('#logoVisible')) settings.logoVisible = $('#logoVisible').checked;
@@ -499,7 +527,7 @@ function logoMarkup(){
 
 function catalogLogoMarkup(){
   if(settings.logoVisible===false) return '';
-  return `<div class="catalog-logo-disc" style="${logoDiscInlineStyle()}">${logoMarkup()}</div>`;
+  return `<div class="catalog-logo-disc">${logoMarkup()}</div>`;
 }
 
 function cornerSvg(cls){
@@ -918,10 +946,122 @@ function renderDynamicPosterRows(){
   </div>`;
 }
 
+function getBackgroundSrc(){
+  if(settings.backgroundMode==='custom' && assets.background) return assets.background;
+  return BUILTIN_BACKGROUNDS[settings.backgroundMode] || BUILTIN_POSTER_BG;
+}
+
 function posterBackgroundStyle(){
-  const bg = (settings.backgroundMode==='custom' && assets.background) ? assets.background : BUILTIN_POSTER_BG;
+  const bg = getBackgroundSrc();
   return `background-image:url('${bg}');background-size:cover;background-position:center;background-repeat:no-repeat;`;
 }
+
+function syncBackgroundPresetUi(){
+  const mode=settings.backgroundMode || 'template';
+  if($('#backgroundMode')) $('#backgroundMode').value=mode;
+  $$('.season-bg-card').forEach(card=>card.classList.toggle('active', card.dataset.bgCard===mode));
+  $$('.season-bg-btn').forEach(btn=>btn.classList.toggle('active', btn.dataset.bgPreset===mode));
+}
+
+function syncLogoPanelFromSettings(){
+  if($('#logoScale')) $('#logoScale').value=Number(settings.logoScale ?? 100);
+  if($('#logoOffsetX')) $('#logoOffsetX').value=Number(settings.logoOffsetX ?? 0);
+  if($('#logoOffsetY')) $('#logoOffsetY').value=Number(settings.logoOffsetY ?? 0);
+  if($('#logoVisible')) $('#logoVisible').checked=settings.logoVisible!==false;
+  syncLogoControlLabels();
+}
+function saveLogoLayout(){
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+  syncLogoPanelFromSettings();
+}
+function bindInteractiveLogo(){
+  const host=$('#posterCanvas');
+  const logo=host?.querySelector('[data-logo-interactive]');
+  if(!logo) return;
+
+  logo.onclick=e=>{
+    if(e.target.closest('.logo-resize-handle')) return;
+    logoSelected=true;
+    selectedId=null;
+    logo.classList.add('logo-selected');
+    updateSelectedControls();
+    renderPosterUi();
+    e.stopPropagation();
+  };
+
+  logo.ondblclick=e=>{
+    if(e.target.closest('.logo-resize-handle')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const inp=$('#logoInput');
+    if(inp){ inp.value=''; inp.click(); }
+  };
+
+  logo.onpointerdown=e=>{
+    if(e.target.closest('.logo-resize-handle')) return;
+    if(e.button!==undefined && e.button!==0) return;
+    logoSelected=true;
+    selectedId=null;
+    pushHistory();
+    logoDragState={
+      mode:'move',
+      startX:e.clientX,
+      startY:e.clientY,
+      baseX:Number(settings.logoOffsetX||0),
+      baseY:Number(settings.logoOffsetY||0)
+    };
+    logo.setPointerCapture?.(e.pointerId);
+    renderPosterUi();
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handle=logo.querySelector('.logo-resize-handle');
+  if(handle){
+    handle.onpointerdown=e=>{
+      if(e.button!==undefined && e.button!==0) return;
+      logoSelected=true;
+      selectedId=null;
+      pushHistory();
+      logoDragState={
+        mode:'resize',
+        startX:e.clientX,
+        startY:e.clientY,
+        baseScale:Number(settings.logoScale||100)
+      };
+      handle.setPointerCapture?.(e.pointerId);
+      renderPosterUi();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+  }
+
+  const move=e=>{
+    if(!logoDragState) return;
+    if(logoDragState.mode==='move'){
+      const dx=e.clientX-logoDragState.startX;
+      const dy=e.clientY-logoDragState.startY;
+      settings.logoOffsetX=Math.max(-110,Math.min(110,Math.round(logoDragState.baseX+dx)));
+      settings.logoOffsetY=Math.max(-90,Math.min(90,Math.round(logoDragState.baseY+dy)));
+    }else{
+      const delta=((e.clientX-logoDragState.startX)+(e.clientY-logoDragState.startY))/2;
+      settings.logoScale=Math.max(55,Math.min(160,Math.round(logoDragState.baseScale+delta*.65)));
+    }
+    logo.style.transform=logoDiscInlineStyle().replace('transform:','').replace(/;$/,'');
+    syncLogoPanelFromSettings();
+  };
+
+  const up=()=>{
+    if(!logoDragState) return;
+    logoDragState=null;
+    saveLogoLayout();
+    renderPoster();
+  };
+
+  window.addEventListener('pointermove',move,{signal:logo._abort?.signal});
+  window.addEventListener('pointerup',up,{signal:logo._abort?.signal});
+}
+
 function renderPoster(){
   settings.posterTitle=$('#posterTitle').value;
   settings.posterSubtitle=$('#posterSubtitle').value;
@@ -950,6 +1090,7 @@ function renderPoster(){
   </section>`;
   applyMediaTransforms(host);
   attachPosterDrag(host);
+  bindInteractiveLogo();
   bindPosterEditable();
   updateSelectedControls();
   renderPosterUi();
@@ -966,6 +1107,7 @@ function applyMediaTransforms(scope=document){
 function attachPosterDrag(scope){
   scope.querySelectorAll('.media-frame[data-product-id]').forEach(frame=>{
     frame.onclick=()=>{
+      logoSelected=false;
       selectedId=Number(frame.dataset.productId);
       updateSelectedControls();
       applyMediaTransforms(scope);
@@ -976,6 +1118,7 @@ function attachPosterDrag(scope){
       const id=Number(frame.dataset.productId);
       const p=products.find(x=>x.id===id);
       if(!p) return;
+      logoSelected=false;
       selectedId=id;
       updateSelectedControls();
       applyMediaTransforms(scope);
@@ -1363,6 +1506,7 @@ $('#logoInput').onchange=async e=>{
   if(!file) return;
   assets.logo=await fileToData(file,1000,.9);
   await dbPut(ASSET_STORE,{key:'logo',value:assets.logo});
+  logoSelected=true;
   renderAll();
 };
 $('#removeLogoBtn').onclick=async()=>{
@@ -1389,12 +1533,21 @@ $('#removeBackgroundBtn').onclick=async()=>{
   await dbDelete(ASSET_STORE,'background');
   renderAll();
 };
+$$('.season-bg-btn').forEach(btn=>btn.onclick=()=>{
+  pushHistory();
+  settings.backgroundMode=btn.dataset.bgPreset;
+  renderAll();
+});
+$('#backgroundMode').addEventListener('change',()=>{
+  settings.backgroundMode=$('#backgroundMode').value;
+  renderAll();
+});
 function renderAssetPreviews(){
   $('#logoPreview').innerHTML=assets.logo ? `<img src="${assets.logo}" alt="PM Dekor logó">` : 'Nincs saját logó – a szöveges PM logó látszik.';
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"7.8",settings,assets,products};
+  const payload={version:"7.10",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1504,6 +1657,7 @@ $('#cropPreview').onpointerdown=e=>{
   if($('#'+id)){
     $('#'+id).addEventListener('input', ()=>{
       applyLogoSettingsFromPanel();
+      logoSelected=true;
       renderPoster();
     });
   }
@@ -1520,10 +1674,12 @@ $('#resetLogoLayoutBtn').onclick=()=>{
   $('#logoOffsetX').value = 0;
   $('#logoOffsetY').value = 0;
   applyLogoSettingsFromPanel();
+  logoSelected=true;
   renderPoster();
 };
 $('#applyLogoLayoutBtn').onclick=()=>{
   applyLogoSettingsFromPanel();
+  logoSelected=true;
   renderPoster();
 };
 

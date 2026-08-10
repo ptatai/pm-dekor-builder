@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#6d1720">
-  <title>PM Dekor – Plakát és katalógus szerkesztő v7.8</title>
+  <title>PM Dekor – Plakát és katalógus szerkesztő v7.10</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
   <div>
     <div class="eyebrow">PM DEKOR</div>
-    <h1>Plakát és katalógus szerkesztő <span class="version">v7.8</span></h1>
+    <h1>Plakát és katalógus szerkesztő <span class="version">v7.10</span></h1>
   </div>
   <div class="runtime-status" id="runtimeStatus">JavaScript indul…</div><div class="header-actions">
     <button class="btn soft" id="demoBtn">Mintaadatok</button>
@@ -95,12 +95,24 @@
           <h3>Háttér</h3>
           <label>Háttér mód
             <select id="backgroundMode">
-              <option value="template">Beépített fotós PM háttér</option>
+              <option value="template">Őszi / Mindenszenteki PM háttér</option>
+              <option value="easter">Húsvéti háttér</option>
+              <option value="christmas">Karácsonyi / téli háttér</option>
               <option value="custom">Saját háttérkép</option>
             </select>
           </label>
+          <div class="season-bg-list">
+            <button class="season-bg-btn" type="button" data-bg-preset="template">Őszi</button>
+            <button class="season-bg-btn" type="button" data-bg-preset="easter">Húsvéti</button>
+            <button class="season-bg-btn" type="button" data-bg-preset="christmas">Karácsonyi</button>
+          </div>
+          <div class="season-bg-preview">
+            <div class="season-bg-card active" data-bg-card="template"><img src="pm-dekor-background.png" alt="Őszi háttér"><span>Őszi</span></div>
+            <div class="season-bg-card" data-bg-card="easter"><img src="pm-dekor-background-easter.png" alt="Húsvéti háttér"><span>Húsvéti</span></div>
+            <div class="season-bg-card" data-bg-card="christmas"><img src="pm-dekor-background-christmas.png" alt="Karácsonyi háttér"><span>Karácsonyi</span></div>
+          </div>
           <label>Saját háttér feltöltése<input id="backgroundInput" type="file" accept="image/*"></label>
-          <button class="btn tiny" type="button" id="removeBackgroundBtn">Saját háttér törlése</button><p class="note">A beépített háttér külön dekorációs réteg: nem tartalmaz fix belső termékkereteket, így nem rondít bele a fotókba.</p>
+          <button class="btn tiny" type="button" id="removeBackgroundBtn">Saját háttér törlése</button><p class="note">Most már három beépített szezonális háttér közül választhatsz, vagy használhatsz saját feltöltött hátteret is.</p>
         </div>
 
         <div class="mini-box">
@@ -230,22 +242,22 @@
         <h3>Logó elhelyezés</h3>
         <label class="check"><input id="logoVisible" type="checkbox" checked><span>Logó megjelenítése a plakáton</span></label>
         <label>Logó mérete
-          <input id="logoScale" type="range" min="70" max="140" value="100">
+          <input id="logoScale" type="range" min="55" max="160" value="100">
           <small id="logoScaleValue">100%</small>
         </label>
         <label>Bal / jobb
-          <input id="logoOffsetX" type="range" min="-40" max="40" value="0">
+          <input id="logoOffsetX" type="range" min="-110" max="110" value="0">
           <small id="logoOffsetXValue">0 px</small>
         </label>
         <label>Fel / le
-          <input id="logoOffsetY" type="range" min="-40" max="40" value="0">
+          <input id="logoOffsetY" type="range" min="-90" max="90" value="0">
           <small id="logoOffsetYValue">0 px</small>
         </label>
         <div class="quick-actions two">
           <button class="btn tiny" id="resetLogoLayoutBtn" type="button">Logó alaphelyzet</button>
           <button class="btn tiny" id="applyLogoLayoutBtn" type="button">Logó előnézet frissítése</button>
         </div>
-        <p class="note">A logó továbbra is cserélhető, és most már külön állítható a mérete és az elhelyezése is.</p>
+        <p class="note">A logót a plakáton közvetlenül is húzhatod. A jobb alsó fogóponttal átméretezhető, dupla kattintással pedig cserélhető.</p>
       </div>
 
       <button class="btn primary" id="saveSettingsBtn">Beállítások mentése</button>
