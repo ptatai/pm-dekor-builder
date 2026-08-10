@@ -1,21 +1,14 @@
-# PM Dekor szerkesztő v6.1
+# PM Dekor szerkesztő v6.3
 
-Ez a verzió kifejezetten arra készült, hogy a **következetlenül feltöltött képeket** is jobban kezelje.
+## Újdonság
+A logó most már nemcsak cserélhető, hanem **dinamikusan állítható** is.
 
-## Újdonságok
-- **AUTO – intelligens képkezelés** új módként
-- új **Intelligens képfeltöltés / illesztés** ablak
-- a program felismeri, ha a kép:
-  - nagyon széles
-  - nagyon magas / álló
-  - kollázs jellegű
-- feltöltéskor ad egy javasolt alapbeállítást
-- a képet már feltöltéskor lehet:
-  - mozgatni
-  - zoomolni
-  - AUTO / Kitöltés / Teljes kép módra állítani
-- a kijelölt plakátos képnél külön **AUTO igazítás** gomb is van
-- drag & drop képcsere esetén is intelligens alapigazítást kap a kép
+### Új logóbeállítások
+- logó megjelenítése ki / be
+- logó mérete
+- logó balra / jobbra mozgatása
+- logó fel / le mozgatása
+- logó alaphelyzet visszaállítása
 
 ## Fájlok
 - index.html
@@ -23,6 +16,3 @@ Ez a verzió kifejezetten arra készült, hogy a **következetlenül feltöltöt
 - app.js
 - pm-dekor-background.png
 - README.md
-
-## Tipp
-Feltöltés után GitHub Pages-en: **Ctrl + Shift + R**

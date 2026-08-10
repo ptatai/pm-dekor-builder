@@ -4,7 +4,7 @@ window.addEventListener('error', function(e){
   if(el){ el.textContent='Hiba: '+(e.message||'JavaScript hiba'); el.classList.add('bad'); }
 });
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const DB_NAME='pm-dekor-v61', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v61';
+const DB_NAME='pm-dekor-v63', PRODUCT_STORE='products', ASSET_STORE='assets', SETTINGS_KEY='pm-dekor-settings-v63';
 let products=[], pendingImage='', pendingImageMeta=null, selectedId=null, dragState=null, undoStack=[], redoStack=[], previewMode=false, cropState=null;
 
 const defaults={
@@ -17,7 +17,11 @@ const defaults={
   posterTitle:'Mindenszenteki sírdíszek',
   posterSubtitle:'Kézzel készített, szeretettel díszítve',
   catalogTitle:'Mindenszenteki kollekció',
-  backgroundMode:'template'
+  backgroundMode:'template',
+  logoVisible:true,
+  logoScale:100,
+  logoOffsetX:0,
+  logoOffsetY:0
 };
 let settings={...defaults,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')};
 let assets={logo:'',background:''};
@@ -267,10 +271,11 @@ function renderAll(){
 
 
 function syncSettingsFromInputs(){
-  ['brandName','facebook','instagram','orderText','thanksText','accentColor','posterTitle','posterSubtitle','catalogTitle','backgroundMode'].forEach(id=>{
+  ['brandName','facebook','instagram','orderText','thanksText','accentColor','posterTitle','posterSubtitle','catalogTitle','backgroundMode','logoScale','logoOffsetX','logoOffsetY'].forEach(id=>{
     const el=$('#'+id);
     if(el) settings[id] = el.value;
   });
+  if($('#logoVisible')) settings.logoVisible = $('#logoVisible').checked;
 }
 function deepClone(v){ return JSON.parse(JSON.stringify(v)); }
 function snapshotState(){
@@ -393,6 +398,30 @@ function renderPosterUi(){
   updateHistoryButtons();
 }
 
+
+function syncLogoControlLabels(){
+  if($('#logoScale')) $('#logoScaleValue').textContent = `${$('#logoScale').value}%`;
+  if($('#logoOffsetX')) $('#logoOffsetXValue').textContent = `${$('#logoOffsetX').value} px`;
+  if($('#logoOffsetY')) $('#logoOffsetYValue').textContent = `${$('#logoOffsetY').value} px`;
+}
+function logoDiscInlineStyle(){
+  const scale = Number(settings.logoScale ?? 100) / 100;
+  const x = Number(settings.logoOffsetX ?? 0);
+  const y = Number(settings.logoOffsetY ?? 0);
+  return `transform:translate(${x}px, ${y}px) scale(${scale});`;
+}
+function logoSlotMarkup(){
+  if(settings.logoVisible === false) return `<div class="logo-slot-empty" aria-hidden="true"></div>`;
+  return `<div class="logo-disc" style="${logoDiscInlineStyle()}">${logoMarkup()}</div>`;
+}
+function applyLogoSettingsFromPanel(){
+  if($('#logoVisible')) settings.logoVisible = $('#logoVisible').checked;
+  if($('#logoScale')) settings.logoScale = Number($('#logoScale').value);
+  if($('#logoOffsetX')) settings.logoOffsetX = Number($('#logoOffsetX').value);
+  if($('#logoOffsetY')) settings.logoOffsetY = Number($('#logoOffsetY').value);
+  syncLogoControlLabels();
+}
+
 function logoMarkup(){
   if(assets.logo) return `<img src="${assets.logo}" alt="PM Dekor logó">`;
   return `<div><div class="pm">PM</div><div class="brand">DEKOR</div><div class="small">MELINDA</div></div>`;
@@ -481,7 +510,7 @@ function renderPoster(){
   const midB=combinedSlotMarkup([items[6],items[7]],'big','mid','ANGYALKÁS SÍRDÍSZEK', items[6]?.price || '2 500 Ft');
   host.innerHTML=`<section class="poster" style="${posterBackgroundStyle()}">
     <header class="poster-head">
-      <div class="logo-disc">${logoMarkup()}</div>
+      ${logoSlotMarkup()}
       <div class="poster-title poster-editable" data-setting-key="posterTitle">
         <div class="script">${esc((settings.posterTitle||'Mindenszenteki sírdíszek').split(' ')[0] || 'Mindenszenteki')}</div>
         <h2>${esc(((settings.posterTitle||'Mindenszenteki sírdíszek').split(' ').slice(1).join(' ')) || 'SÍRDÍSZEK')}</h2>
@@ -851,11 +880,13 @@ $('#productForm').onsubmit=async e=>{
 };
 
 function loadSettingsUi(){
-  ['brandName','facebook','instagram','orderText','thanksText','accentColor','posterTitle','posterSubtitle','catalogTitle','backgroundMode'].forEach(id=>{
+  ['brandName','facebook','instagram','orderText','thanksText','accentColor','posterTitle','posterSubtitle','catalogTitle','backgroundMode','logoScale','logoOffsetX','logoOffsetY'].forEach(id=>{
     if($('#'+id) && settings[id]!==undefined) $('#'+id).value=settings[id];
   });
+  if($('#logoVisible')) $('#logoVisible').checked = settings.logoVisible !== false;
   setAccent(settings.accentColor);
   updateAddLabels();
+  syncLogoControlLabels();
   updateHistoryButtons();
 }
 $('#saveSettingsBtn').onclick=()=>{
@@ -870,6 +901,10 @@ $('#saveSettingsBtn').onclick=()=>{
   settings.posterSubtitle=$('#posterSubtitle').value.trim();
   settings.catalogTitle=$('#catalogTitle').value.trim();
   settings.backgroundMode=$('#backgroundMode').value;
+  settings.logoVisible=$('#logoVisible').checked;
+  settings.logoScale=Number($('#logoScale').value);
+  settings.logoOffsetX=Number($('#logoOffsetX').value);
+  settings.logoOffsetY=Number($('#logoOffsetY').value);
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
   setAccent(settings.accentColor);
   renderAll();
@@ -914,7 +949,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"6.1",settings,assets,products};
+  const payload={version:"6.3",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1020,6 +1055,34 @@ $('#cropPreview').onpointerdown=e=>{
   window.addEventListener('pointerup',up);
 };
 
+
+
+['logoScale','logoOffsetX','logoOffsetY'].forEach(id=>{
+  if($('#'+id)){
+    $('#'+id).addEventListener('input', ()=>{
+      applyLogoSettingsFromPanel();
+      renderPoster();
+    });
+  }
+});
+if($('#logoVisible')){
+  $('#logoVisible').addEventListener('input', ()=>{
+    applyLogoSettingsFromPanel();
+    renderPoster();
+  });
+}
+$('#resetLogoLayoutBtn').onclick=()=>{
+  $('#logoVisible').checked = true;
+  $('#logoScale').value = 100;
+  $('#logoOffsetX').value = 0;
+  $('#logoOffsetY').value = 0;
+  applyLogoSettingsFromPanel();
+  renderPoster();
+};
+$('#applyLogoLayoutBtn').onclick=()=>{
+  applyLogoSettingsFromPanel();
+  renderPoster();
+};
 
 $('#exportPosterBtn').onclick=async()=>{
   const btn=$('#exportPosterBtn');
