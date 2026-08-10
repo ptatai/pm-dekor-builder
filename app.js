@@ -166,15 +166,14 @@ function getTargetRatio(kind='generic'){
 }
 function getSmartImageRecommendation(width,height,targetKind='generic'){
   const ar=(width&&height)?width/height:1;
-  const target=getTargetRatio(targetKind);
   let recommendation='Normál arányú kép';
   let suggested='cover';
 
   if(targetKind==='catalog'){
-    if(ar>1.28){
+    if(ar>1.16){
       suggested='contain';
       recommendation='Széles vagy kollázs kép – a katalógusban a „Teljes kép” ajánlott.';
-    }else if(ar<0.86){
+    }else if(ar<0.90){
       suggested='contain';
       recommendation='Álló jellegű kép – a katalógusban a „Teljes kép” ajánlott.';
     }else{
@@ -185,15 +184,12 @@ function getSmartImageRecommendation(width,height,targetKind='generic'){
   }
 
   if(targetKind==='generic'){
-    if(ar>1.25){
+    if(ar>1.12){
       suggested='contain';
-      recommendation='Széles vagy kollázs kép – AUTO módban a teljes kép megjelenítés ajánlott.';
-    }else if(ar<0.88){
+      recommendation='Széles vagy kollázs kép – a plakáton a „Teljes kép” ajánlott.';
+    }else if(ar<0.92){
       suggested='contain';
-      recommendation='Álló jellegű kép – AUTO módban a teljes kép megjelenítés ajánlott.';
-    }else if(ar>1.12 && ar<1.25){
-      suggested='contain';
-      recommendation='Enyhén széles kép – a plakáton finomabban mutat teljes képpel.';
+      recommendation='Álló jellegű kép – a plakáton a „Teljes kép” ajánlott.';
     }else{
       suggested='cover';
       recommendation='Normál termékfotó – jól működik kitöltéssel.';
@@ -201,18 +197,9 @@ function getSmartImageRecommendation(width,height,targetKind='generic'){
     return {aspect:ar,suggested,recommendation};
   }
 
-  if(ar>target*1.55){
+  if(ar>1.5 || ar<0.78){
     suggested='contain';
-    recommendation='Nagyon széles kép – AUTO módban a „Teljes kép” ajánlott.';
-  }else if(ar<target*0.72){
-    suggested='contain';
-    recommendation='Nagyon magas / álló kép – AUTO módban a „Teljes kép” ajánlott.';
-  }else if(ar>1.85){
-    suggested='contain';
-    recommendation='Panorámás / kollázs jellegű kép – finomabb vágás javasolt.';
-  }else if(ar<0.82){
-    suggested='contain';
-    recommendation='Álló jellegű kép – érdemes óvatosabban vágni.';
+    recommendation='Erősen eltérő képarány – a „Teljes kép” ajánlott.';
   }
   return {aspect:ar,suggested,recommendation};
 }
@@ -220,10 +207,9 @@ function getSmartDefaults(width,height,targetKind='generic'){
   const rec=getSmartImageRecommendation(width,height,targetKind);
   let scale=100, offsetX=0, offsetY=0;
   if(rec.suggested==='contain'){
-    if(rec.aspect>1.9 || rec.aspect<0.62) scale=92;
-    else scale=96;
+    scale=100;
   }else{
-    if(Math.abs(rec.aspect-getTargetRatio(targetKind))>.5) scale=108;
+    if(Math.abs(rec.aspect-getTargetRatio(targetKind))>.5) scale=106;
   }
   return {frameMode:'auto',scale,offsetX,offsetY,recommendation:rec.recommendation};
 }
@@ -488,10 +474,11 @@ function syncLogoControlLabels(){
   if($('#logoOffsetY')) $('#logoOffsetYValue').textContent = `${$('#logoOffsetY').value} px`;
 }
 function logoDiscInlineStyle(){
-  const scale = Number(settings.logoScale ?? 100) / 100;
-  const x = Number(settings.logoOffsetX ?? 0);
-  const y = Number(settings.logoOffsetY ?? 0);
-  return `transform:translate(${x}px, ${y}px) scale(${scale});`;
+  const hasCustom = !!assets.logo;
+  const scale = hasCustom ? (Number(settings.logoScale ?? 100) / 100) : 1;
+  const x = hasCustom ? Number(settings.logoOffsetX ?? 0) : 0;
+  const y = hasCustom ? Number(settings.logoOffsetY ?? 0) : 0;
+  return `--logo-scale:${scale};--logo-x:${x}px;--logo-y:${y}px;`;
 }
 function logoSlotMarkup(){
   if(settings.logoVisible === false) return `<div class="logo-slot-empty" aria-hidden="true"></div>`;
@@ -506,13 +493,13 @@ function applyLogoSettingsFromPanel(){
 }
 
 function logoMarkup(){
-  if(assets.logo) return `<img src="${assets.logo}" alt="PM Dekor logó">`;
-  return `<div><div class="pm">PM</div><div class="brand">DEKOR</div><div class="small">MELINDA</div></div>`;
+  if(assets.logo) return `<img class="logo-inner" src="${assets.logo}" alt="PM Dekor logó">`;
+  return `<div class="logo-fallback"><div class="pm">PM</div><div class="brand">DEKOR</div><div class="small">MELINDA</div></div>`;
 }
 
 function catalogLogoMarkup(){
   if(settings.logoVisible===false) return '';
-  return `<div class="catalog-logo-disc">${logoMarkup()}</div>`;
+  return `<div class="catalog-logo-disc" style="${logoDiscInlineStyle()}">${logoMarkup()}</div>`;
 }
 
 function cornerSvg(cls){
@@ -1407,7 +1394,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"7.7",settings,assets,products};
+  const payload={version:"7.8",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);

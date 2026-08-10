@@ -1,31 +1,18 @@
-# PM Dekor szerkesztő v7.7
+# PM Dekor szerkesztő v7.8
 
-## Új termékadat: Plakát alcím
-A termék most külön kezeli:
-- Terméknév
-- Ár
-- Kategória
-- **Plakát alcím**
-- Leírás
+Gyors hibajavító kiadás.
 
-### Plakát
-A mini termékfelirat sorrendje:
-1. Plakát alcím
-2. ha nincs, Kategória
-3. ha az sincs, Terméknév
+## Javítva
+1. **Szétcsúszó / rosszul illeszkedő kép**
+   - az AUTO képarány-logika szigorúbb lett;
+   - a széles és álló képek hamarabb váltanak `Teljes kép` megjelenítésre;
+   - a contain képek középre rendezve, torzítás nélkül jelennek meg.
 
-A hosszabb leírás nem zsúfolja a plakátot.
+2. **Logó nem látszik rendesen**
+   - a logó külső köre most stabil marad;
+   - a skálázás/eltolás csak a belső logótartalomra hat;
+   - a fallback PM DEKOR MELINDA felirat is kulturáltabban fér el.
 
-### Katalógus
-A katalógus továbbra is megjeleníti:
-- kategóriát
-- terméknevet
-- leírást
-- árat
-
-## Logó javítás
-- a katalógus fejlécébe is bekerült a dinamikus logó;
-- export előtt a program megvárja a képek és betűk betöltődését;
-- ez csökkenti annak esélyét, hogy a logó vagy egy termékkép lemaradjon a PNG/PDF exportból.
-
-A meglévő termékek tovább működnek; az új `Plakát alcím` mező náluk kezdetben üres.
+3. **Jobb oldali felirat nehezen olvasható**
+   - erősebb, de még finom fejléc-háttér került a cím mögé;
+   - a blokkcímek is kaptak egy halvány olvashatósági hátteret.

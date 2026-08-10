@@ -1278,3 +1278,153 @@ input[type="color"]{height:42px;padding:4px}
 .poster .v7-mini-title{
   font-weight:800;
 }
+
+
+/* ==========================================================
+   V7.8 – három gyors hiba javítása
+   1) képillesztés stabilabb
+   2) logó biztosabban látszik
+   3) jobb oldali feliratok olvashatóbbak
+   ========================================================== */
+
+/* A logó teljes köre maradjon stabil, csak a belső tartalom mozogjon. */
+.logo-disc,
+.catalog-logo-disc{
+  display:grid;
+  place-items:center;
+}
+.logo-disc img,
+.catalog-logo-disc img,
+.logo-disc .logo-fallback,
+.catalog-logo-disc .logo-fallback{
+  transform:translate(var(--logo-x,0px), var(--logo-y,0px)) scale(var(--logo-scale,1));
+  transform-origin:center center;
+}
+.logo-disc img{
+  max-width:80%;
+  max-height:80%;
+  object-fit:contain;
+}
+.catalog-logo-disc img{
+  max-width:78%;
+  max-height:78%;
+  object-fit:contain;
+}
+.logo-disc .logo-fallback,
+.catalog-logo-disc .logo-fallback{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  line-height:1;
+}
+.logo-disc .pm{
+  font-size:50px;
+}
+.logo-disc .brand{
+  margin-top:1px;
+  font-size:13px;
+}
+.logo-disc .small{
+  font-size:10px;
+}
+.catalog-logo-disc .pm{
+  font-size:22px;
+}
+.catalog-logo-disc .brand{
+  font-size:7px;
+}
+.catalog-logo-disc .small{
+  font-size:6px;
+}
+
+/* Fejléc – erősebb olvashatósági sáv, főleg jobb oldalon. */
+.poster-head::before{
+  left:218px;
+  right:42px;
+  top:8px;
+  height:122px;
+  border-radius:28px;
+  background:linear-gradient(90deg,
+    rgba(255,250,243,.96) 0%,
+    rgba(255,250,243,.94) 55%,
+    rgba(255,250,243,.90) 74%,
+    rgba(255,250,243,.78) 100%);
+}
+.poster-head::after{
+  content:"";
+  position:absolute;
+  right:28px;
+  top:8px;
+  width:280px;
+  height:124px;
+  border-radius:28px;
+  background:linear-gradient(90deg,
+    rgba(255,250,243,0) 0%,
+    rgba(255,250,243,.48) 18%,
+    rgba(255,250,243,.78) 55%,
+    rgba(255,250,243,.92) 100%);
+  z-index:0;
+  pointer-events:none;
+}
+.poster-title{
+  max-width:620px;
+}
+.poster-title .tag{
+  padding:2px 10px;
+  background:rgba(255,250,243,.54);
+  border-radius:999px;
+  display:inline-block;
+}
+
+/* Blokkcímek legyenek olvashatóbbak a dekor előtt is. */
+.poster .v7-block-head{
+  align-items:center;
+}
+.poster .v7-block-title{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  background:rgba(255,248,240,.84);
+  box-shadow:0 1px 0 rgba(129,89,46,.08);
+  text-shadow:0 1px 0 rgba(255,255,255,.66);
+}
+
+/* Képek: a contain képek kulturáltabban illeszkedjenek. */
+.poster .v7-media-cell.contain,
+.catalog-photo.contain{
+  display:grid;
+  place-items:center;
+}
+.poster .v7-media-cell.contain img,
+.catalog-photo.contain img{
+  width:auto !important;
+  height:auto !important;
+  max-width:calc(100% - 14px);
+  max-height:calc(100% - 14px);
+}
+.poster .v7-media-cell.cover img,
+.catalog-photo.cover img{
+  min-width:100%;
+  min-height:100%;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.poster .v7-block-media.slots-1 .v7-media-cell{
+  min-height:258px;
+}
+
+/* Mobilon is maradjon kulturált az olvashatóság */
+@media(max-width:980px){
+  .poster-head::before{
+    left:184px;
+    right:32px;
+    width:auto;
+  }
+  .poster-head::after{
+    width:220px;
+    right:18px;
+  }
+}
