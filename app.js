@@ -1547,7 +1547,7 @@ function renderAssetPreviews(){
 }
 
 $('#backupBtn').onclick=()=>{
-  const payload={version:"7.10",settings,assets,products};
+  const payload={version:"7.11",settings,assets,products};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1710,17 +1710,40 @@ async function waitForRenderableAssets(root){
   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
 }
 
+
+async function exportElementAsPng(node, fileName, scale=2){
+  const host=document.createElement('div');
+  host.className='export-host';
+  host.style.position='fixed';
+  host.style.left='-200vw';
+  host.style.top='0';
+  host.style.pointerEvents='none';
+  host.style.opacity='1';
+  host.style.zIndex='-1';
+  const clone=node.cloneNode(true);
+  clone.classList.add('clean-preview','export-snapshot');
+  clone.querySelectorAll('.poster-toolbar,.logo-resize-handle').forEach(el=>el.remove());
+  clone.querySelectorAll('.logo-disc').forEach(el=>el.classList.remove('logo-selected'));
+  host.appendChild(clone);
+  document.body.appendChild(host);
+  try{
+    await waitForRenderableAssets(clone);
+    const canvas=await html2canvas(clone,{scale,useCORS:true,backgroundColor:'#fffaf0'});
+    const a=document.createElement('a');
+    a.download=fileName;
+    a.href=canvas.toDataURL('image/png');
+    a.click();
+  }finally{
+    host.remove();
+  }
+}
+
 $('#exportPosterBtn').onclick=async()=>{
   const btn=$('#exportPosterBtn');
   btn.disabled=true; btn.textContent='Készül…';
   try{
     const el=$('#posterCanvas').firstElementChild;
-    await waitForRenderableAssets(el);
-    const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#fffaf0'});
-    const a=document.createElement('a');
-    a.download='pm-dekor-plakat.png';
-    a.href=canvas.toDataURL('image/png');
-    a.click();
+    await exportElementAsPng(el,'pm-dekor-plakat.png',2);
   }finally{
     btn.disabled=false; btn.textContent='Plakát letöltése PNG-ben';
   }

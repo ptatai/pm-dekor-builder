@@ -24,3 +24,9 @@ A Tiszta előnézet / export során a kijelölés és a méretező fogópont nem
 - választható beépített háttér: őszi / húsvéti / karácsonyi
 - gyors háttérválasztó gombok és kis előnézetek
 - a saját háttér feltöltése továbbra is megmaradt
+
+
+## v7.11
+- a szezonális háttérválasztás újra egyszerű legördülős lett
+- finomabb, áttetszőbb fejléc-háttér a cím mögött
+- biztonságosabb plakát-export klónozott exportnézettel, hogy a logó a letöltött PNG-n is megjelenjen
